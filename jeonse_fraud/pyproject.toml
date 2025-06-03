@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "jeonse-fraud"
+version = "0.1.0"
+description = "Proof of Concept for a Jeonse Fraud Detection Service"
+authors = ["wesley"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+ipykernel = "^6.29.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

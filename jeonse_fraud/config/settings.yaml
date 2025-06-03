@@ -1,0 +1,63 @@
+# config/settings.yaml
+
+# LLM 설정
+llm:
+  provider: "openai"
+  model_name: "gpt-4o"
+  # OPENAI_API_KEY 는 .env 파일을 통해 환경 변수로 주입
+  temperature: 0.2 # 좀 더 일관된 답변을 위해 약간 낮춤
+  max_tokens: 3000 # 보고서 생성 등 충분한 토큰
+  timeout: 180
+
+# RAG 및 Vector DB 설정
+rag:
+  vector_db_path: "data/vector_db/jeonse_fraud_db_prod" # PoC와 구분되는 경로 사용 가능
+  embedding_model_name: "jhgan/ko-sroberta-multitask"
+  rag_top_k: 5
+  chunk_size: 1000
+  chunk_overlap: 100
+
+# 외부 API 설정 (실제 사용 시 엔드포인트 및 키 관리 방식 필요)
+external_apis:
+  # 국토교통부_건축물대장정보 서비스 (건축HUB)
+  building_ledger:
+    service_key_env_var: "DATAPORTAL_API_KEY"
+    base_url: "https://apis.data.go.kr/1613000/BldRgstHubService"
+    # 예시: getBrBasisOulnInfo (기본개요), getBrTitleInfo (표제부 - 위반건축물 정보 포함)
+    endpoints:
+      basic_outline: "/getBrBasisOulnInfo"
+      title_info: "/getBrTitleInfo"
+
+  # 국토교통부_실거래가 정보
+  real_estate_transaction:
+    # REAL_ESTATE_API_KEY 는 .env 파일을 통해 환경 변수로 주입
+    service_key_env_var: "REAL_ESTATE_API_KEY"
+    base_url: "https://apis.data.go.kr/1613000" # 예시 URL
+    endpoints:
+      apartment_rent: "/RTMSDataSvcAptRent/getRTMSDataSvcAptRent"     # 아파트 전월세
+      RH_rent: "/RTMSDataSvcRHRent/getRTMSDataSvcRHRent"   # 다세대 전월세
+      offi_rent: "/RTMSDataSvcOffiRent/getRTMSDataSvcOffiRent"   # 오피스 전월세
+      SH_rent: "/RTMSDataSvcSHRent/getRTMSDataSvcSHRent"   # 단독/다가구 전월세
+
+# 파일 경로 설정 (프로젝트 루트 기준)
+paths:
+  input_data_base: "data/input/"
+  rag_sources_base: "data/rag_sources/"
+  reports_base: "reports/"
+  prompts_base: "prompts/"
+  docs_base: "docs/" # evaluation_framework.md 용
+
+# 위험 평가 관련 임계값 (예시)
+risk_thresholds:
+  kkangtong_jeonse_ratio:
+    caution: 0.70
+    high: 0.80
+  ownership_change_short_term_months: 6
+
+# 보고서 설정
+report:
+  output_format: "markdown"
+  include_evaluation_appendix: true
+
+# 기타 설정
+default_test_case_id: "sample_case_real_api"

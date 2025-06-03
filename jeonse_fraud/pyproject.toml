@@ -8,6 +8,9 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 ipykernel = "^6.29.5"
+dotenv = "^0.9.9"
+datetime = "^5.5"
+openai = "^1.83.0"
 
 
 [build-system]

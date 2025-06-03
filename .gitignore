@@ -1,0 +1,42 @@
+# 바이트코드 및 캐시 디렉터리
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 편집기나 IDE가 생성하는 임시 파일
+*.swp
+
+# Poetry의 기본 가상환경(.venv) 혹은 venv 디렉터리
+**/.venv/
+**/venv/
+
+# Docker 관련
+*.tar
+docker-compose.override.yml
+docker-build/
+.docker/
+
+# 주요 환경설정
+.env
+.env.*
+
+# macOS 관련
+.DS_Store
+
+# IDE/에디터 설정 폴더
+.ipynb_checkpoints/
+.vscode/
+.idea/
+*.code-workspace
+
+# 로그 및 임시 데이터 파일
+data/
+logs/
+*.log
+*.tmp
+*.bak
+
+# 빌드 결과물
+build/
+dist/
+*.egg-info/

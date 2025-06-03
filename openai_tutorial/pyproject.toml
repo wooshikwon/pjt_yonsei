@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "openai-api"
+version = "0.1.0"
+description = "opena실습"
+authors = ["wooshikwon"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+openai = "^1.78.1"
+pandas = "^2.2.3"
+numpy = "^2.2.5"
+tqdm = "^4.67.1"
+dotenv = "^0.9.9"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

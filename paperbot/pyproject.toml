@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "paperbot"
+version = "0.1.0"
+description = "LLM-powered Slack bot that delivers concise, real-time summaries of essential new research papers."
+authors = ["Wesley"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pandas = "^2.2.3"
+numpy = "^2.2.6"
+jupyterlab = "^4.4.3"
+ipykernel = "^6.29.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

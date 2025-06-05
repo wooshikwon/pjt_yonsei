@@ -1,38 +1,45 @@
 """
-LLMAgent: 통계 분석 워크플로우 오케스트레이션 및 상태 관리
+LLMAgent: Multi-turn 대화형 통계 분석 워크플로우 오케스트레이션 및 상태 관리
 
-전체 통계 분석 프로세스의 중앙 컨트롤 타워 역할을 하며,
-워크플로우의 각 단계를 실행하고 상태를 관리합니다.
+Enhanced RAG 시스템 (비즈니스 지식 + DB 스키마)을 활용한 Multi-turn 대화형 통계 분석 프로세스의 
+중앙 컨트롤 타워 역할을 하며, AI 추천 기반 워크플로우의 각 단계를 실행하고 세션 상태를 관리합니다.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import pandas as pd
 from datetime import datetime
+import json
+import re
+from pathlib import Path
 
 
 class LLMAgent:
     """
-    LLM Agent 기반 통계 검정 자동화 시스템의 핵심 클래스
+    Enhanced RAG 기반 Multi-turn LLM Agent - 통계 검정 자동화 시스템의 핵심 클래스
     
-    워크플로우 상태 기계의 실행자 역할을 하며, 각 노드별 작업을 처리하고
-    전체 분석 과정을 관리합니다.
+    비즈니스 컨텍스트 인식 AI 추천 기반 워크플로우 상태 기계의 실행자 역할을 하며, 
+    각 노드별 작업을 처리하고 전체 대화형 분석 세션을 관리합니다.
     """
     
     def __init__(self, workflow_manager, decision_engine, context_manager, 
-                 llm_client, prompt_crafter, data_loader, code_retriever, 
-                 safe_code_executor, report_generator):
+                 llm_client, prompt_crafter, data_loader, 
+                 business_retriever, schema_retriever, rag_manager,
+                 analysis_recommender, safe_code_executor, report_generator):
         """
-        LLMAgent 초기화
+        Enhanced RAG 기반 Multi-turn LLMAgent 초기화
         
         Args:
-            workflow_manager: 워크플로우 관리자
+            workflow_manager: Multi-turn 워크플로우 관리자
             decision_engine: 의사결정 엔진
-            context_manager: 컨텍스트 관리자
+            context_manager: 세션 컨텍스트 관리자
             llm_client: LLM 클라이언트
             prompt_crafter: 프롬프트 생성기
             data_loader: 데이터 로더
-            code_retriever: 코드 검색기
+            business_retriever: 비즈니스 지식 검색기
+            schema_retriever: DB 스키마 구조 검색기
+            rag_manager: RAG 통합 관리자
+            analysis_recommender: AI 분석 추천 엔진
             safe_code_executor: 안전 코드 실행기
             report_generator: 보고서 생성기
         """
@@ -42,271 +49,406 @@ class LLMAgent:
         self.llm_client = llm_client
         self.prompt_crafter = prompt_crafter
         self.data_loader = data_loader
-        self.code_retriever = code_retriever
+        
+        # Enhanced RAG 시스템 컴포넌트
+        self.business_retriever = business_retriever
+        self.schema_retriever = schema_retriever
+        self.rag_manager = rag_manager
+        self.analysis_recommender = analysis_recommender
+        
         self.safe_code_executor = safe_code_executor
         self.report_generator = report_generator
         
-        # 상태 관리
-        self.current_node_id = "start"
-        self.raw_data: Optional[pd.DataFrame] = None
-        self.processed_data: Optional[pd.DataFrame] = None
-        self.analysis_parameters: Dict[str, Any] = {}
-        self.user_interaction_history: list = []
+        # Multi-turn 세션 상태 관리
+        self.current_node_id = None
+        self.session_active = False
+        self.session_data = {}
+        self.raw_data = None
+        self.processed_data = None
+        self.user_interaction_history = []
         
-        # 로깅 설정
+        # Enhanced RAG 및 AI 추천 관련 상태
+        self.business_context = {}
+        self.schema_context = {}
+        self.ai_recommendations = []
+        self.selected_recommendation = None
+        self.natural_language_request = ""
+        
+        # 대화형 모드 관련 상태
+        self.interactive_mode = True  # Multi-turn은 항상 대화형
+        self.pending_user_confirmation = None
+        self.workflow_paused = False
+        self.conversation_context = []
+        
+        # 로거 설정
         self.logger = logging.getLogger(__name__)
         
-    def run(self, input_data_path: Optional[str] = None) -> str:
+    def start_session(self, data_path: Optional[str] = None) -> Dict:
         """
-        전체 분석 프로세스 시작
+        Enhanced RAG 기반 Multi-turn 분석 세션 시작
         
         Args:
-            input_data_path: 입력 데이터 파일 경로
+            data_path: 분석할 데이터 파일 경로 (선택사항)
             
         Returns:
-            str: 생성된 보고서 파일 경로
+            Dict: 세션 시작 결과
         """
-        self.logger.info("LLM Agent 워크플로우 시작")
+        self.logger.info("Enhanced RAG 기반 Multi-turn 분석 세션 시작")
         
-        # 초기 설정
-        if input_data_path:
-            self._load_initial_data(input_data_path)
-            
-        # 시작 노드 설정
+        # 세션 초기화
+        self.session_active = True
         self.current_node_id = self.workflow_manager.get_initial_node_id()
+        self.session_data = {
+            'session_id': datetime.now().strftime('%Y%m%d_%H%M%S'),
+            'start_time': datetime.now(),
+            'data_path': data_path
+        }
         
-        # 메인 루프 실행
-        self._main_loop()
+        # RAG 시스템 초기화
+        self.business_context = {}
+        self.schema_context = {}
         
-        # 최종 보고서 생성
-        report_path = self._generate_final_report()
-        
-        self.logger.info(f"워크플로우 완료. 보고서: {report_path}")
-        return report_path
-    
-    def _load_initial_data(self, data_path: str):
-        """초기 데이터 로딩"""
-        try:
-            self.raw_data = self.data_loader.load_data(data_path)
-            self.logger.info(f"데이터 로딩 완료: {self.raw_data.shape}")
-            
-            # 컨텍스트에 추가
-            self.context_manager.add_interaction(
-                role="system",
-                content=f"데이터 로딩 완료: {self.raw_data.shape[0]}행 {self.raw_data.shape[1]}열",
-                node_id="data_loading"
-            )
-        except Exception as e:
-            self.logger.error(f"데이터 로딩 실패: {e}")
-            raise
-    
-    def _main_loop(self):
-        """
-        메인 워크플로우 루프
-        
-        현재 노드 처리 -> 다음 노드 결정 -> 상태 전이를 반복하며
-        워크플로우 종료 조건 만족시까지 실행합니다.
-        """
-        max_iterations = 100  # 무한 루프 방지
-        iteration_count = 0
-        
-        while (not self.workflow_manager.is_terminal_node(self.current_node_id) 
-               and iteration_count < max_iterations):
-            
-            self.logger.info(f"현재 노드 처리: {self.current_node_id}")
-            
-            # 현재 노드 처리
-            execution_result = self._process_current_node()
-            
-            # 다음 노드 결정
-            next_node_id = self._determine_next_node(execution_result)
-            
-            if next_node_id is None:
-                self.logger.warning("다음 노드를 결정할 수 없습니다. 워크플로우 종료.")
-                break
-                
-            # 상태 전이 로깅
-            self._log_state_transition(self.current_node_id, next_node_id, str(execution_result))
-            
-            # 다음 노드로 이동
-            self.current_node_id = next_node_id
-            iteration_count += 1
-        
-        if iteration_count >= max_iterations:
-            self.logger.warning("최대 반복 횟수 도달. 워크플로우 강제 종료.")
-    
-    def _process_current_node(self) -> Any:
-        """
-        현재 노드의 작업을 수행
-        
-        Returns:
-            Any: 노드 처리 결과
-        """
-        current_node = self.workflow_manager.get_node(self.current_node_id)
-        
-        if current_node is None:
-            raise ValueError(f"존재하지 않는 노드: {self.current_node_id}")
-        
-        node_description = current_node.get('description', '')
-        self.logger.info(f"노드 처리 중: {node_description}")
-        
-        # 노드 타입에 따른 처리 분기
-        if self._is_llm_node(current_node):
-            return self._handle_llm_interaction(current_node)
-        elif self._is_user_input_node(current_node):
-            return self._handle_user_confirmation(current_node)
-        elif self._is_data_processing_node(current_node):
-            return self._handle_data_processing(current_node)
-        elif self._is_code_execution_node(current_node):
-            return self._handle_code_execution(current_node)
-        else:
-            # 기본 처리
-            return self._handle_default_node(current_node)
-    
-    def _is_llm_node(self, node: Dict) -> bool:
-        """LLM 처리가 필요한 노드인지 판단"""
-        description = node.get('description', '').lower()
-        return any(keyword in description for keyword in 
-                  ['llm', '분석', '판단', '확인', '해석', '추천'])
-    
-    def _is_user_input_node(self, node: Dict) -> bool:
-        """사용자 입력이 필요한 노드인지 판단"""
-        description = node.get('description', '').lower()
-        return '사용자' in description and ('확인' in description or '입력' in description)
-    
-    def _is_data_processing_node(self, node: Dict) -> bool:
-        """데이터 처리 노드인지 판단"""
-        description = node.get('description', '').lower()
-        return any(keyword in description for keyword in 
-                  ['데이터', '로딩', '전처리', '변환', '정제'])
-    
-    def _is_code_execution_node(self, node: Dict) -> bool:
-        """코드 실행 노드인지 판단"""
-        description = node.get('description', '').lower()
-        return any(keyword in description for keyword in 
-                  ['검정 수행', '코드', '실행', '계산'])
-    
-    def _handle_llm_interaction(self, node_details: Dict) -> str:
-        """LLM과의 상호작용 처리"""
-        # 현재 컨텍스트 준비
-        context_summary = self.context_manager.get_optimized_context(
-            current_task_prompt=node_details.get('description', ''),
-            required_recent_interactions=3
-        )
-        
-        # 프롬프트 생성
-        prompt = self.prompt_crafter.get_prompt_for_node(
-            node_id=self.current_node_id,
-            dynamic_data={
-                'node_description': node_details.get('description', ''),
-                'analysis_parameters': self.analysis_parameters,
-                'data_info': self._get_data_summary() if self.raw_data is not None else None
-            },
-            agent_context_summary=context_summary
-        )
-        
-        # LLM 호출
-        response = self.llm_client.generate_text(prompt)
-        
-        # 응답을 컨텍스트에 추가
+        # 컨텍스트 초기화
         self.context_manager.add_interaction(
-            role="assistant",
-            content=response,
+            role="system",
+            content="Enhanced RAG 기반 Multi-turn 통계 분석 세션이 시작되었습니다.",
             node_id=self.current_node_id
         )
         
-        # 분석 파라미터 업데이트
-        self._update_analysis_parameters_from_response(response)
+        # 데이터가 제공된 경우 로딩
+        if data_path:
+            self._load_session_data(data_path)
         
-        return response
+        self.logger.info(f"세션 시작됨 - ID: {self.session_data['session_id']}")
+        return {
+            'session_started': True,
+            'session_id': self.session_data['session_id'],
+            'current_node': self.current_node_id,
+            'message': "Enhanced RAG 기반 Multi-turn 분석 세션이 시작되었습니다.",
+            'next_action': self._get_next_action_description()
+        }
     
-    def _handle_user_confirmation(self, node_details: Dict) -> str:
-        """사용자 확인 처리"""
-        description = node_details.get('description', '')
-        print(f"\n🤖 시스템: {description}")
+    def process_user_input(self, user_input: str) -> Dict:
+        """
+        사용자 입력 처리 및 Enhanced RAG 기반 워크플로우 진행
         
-        # 현재 분석 상태 출력
-        if self.analysis_parameters:
-            print("\n현재 분석 상태:")
-            for key, value in self.analysis_parameters.items():
-                print(f"  • {key}: {value}")
+        Args:
+            user_input: 사용자 입력 텍스트
+            
+        Returns:
+            Dict: 처리 결과
+        """
+        if not self.session_active:
+            return {'error': '활성 세션이 없습니다. 먼저 세션을 시작해주세요.'}
         
-        user_input = input("\n👤 응답을 입력하세요 (예/아니오/수정): ").strip()
+        self.logger.info(f"사용자 입력 처리: {user_input}")
         
         # 사용자 입력을 컨텍스트에 추가
         self.context_manager.add_interaction(
-            role="user", 
+            role="user",
             content=user_input,
             node_id=self.current_node_id
         )
         
-        return user_input
+        # 현재 노드에 따른 처리 - 새로운 워크플로우 대응
+        try:
+            if self.current_node_id == 'data_selection':
+                return self._handle_data_selection(user_input)
+            elif self.current_node_id == 'natural_language_request':
+                return self._handle_natural_language_request(user_input)
+            elif self.current_node_id == 'rag_system_activation':
+                return self._handle_rag_system_activation()
+            elif self.current_node_id == 'ai_recommendation_generation':
+                return self._handle_ai_recommendation_generation()
+            elif self.current_node_id == 'recommendation_display':
+                return self._handle_recommendation_display()
+            elif self.current_node_id == 'method_confirmation':
+                return self._handle_method_confirmation(user_input)
+            elif self.current_node_id == 'session_continuation':
+                return self._handle_session_continuation(user_input)
+            else:
+                return self._handle_general_node_processing(user_input)
+                
+        except Exception as e:
+            self.logger.error(f"사용자 입력 처리 중 오류: {e}")
+            return {
+                'error': f'처리 중 오류가 발생했습니다: {str(e)}',
+                'requires_input': True,
+                'question': "다시 시도하시겠습니까? (y/n)"
+            }
     
-    def _handle_data_processing(self, node_details: Dict) -> Dict:
-        """데이터 처리 작업"""
+    def _handle_data_selection(self, user_input: str) -> Dict:
+        """데이터 선택 노드 처리"""
+        self.logger.info("데이터 선택 처리 시작")
+        
+        # 입력이 숫자인 경우 (데이터 파일 선택)
+        if user_input.strip().isdigit():
+            return self._handle_data_file_selection(int(user_input.strip()))
+        
+        # 파일 경로로 간주하고 데이터 로딩 시도
+        try:
+            self._load_session_data(user_input.strip())
+            return self._transition_to_data_overview()
+        except Exception as e:
+            return {
+                'error': f'데이터 로딩 실패: {str(e)}',
+                'requires_input': True,
+                'question': "올바른 데이터 파일 경로를 입력해주세요:"
+            }
+    
+    def _handle_natural_language_request(self, user_input: str) -> Dict:
+        """자연어 분석 요청 처리"""
+        self.logger.info("자연어 분석 요청 처리 시작")
+        
+        self.natural_language_request = user_input.strip()
+        
+        # 자연어 요청 기본 검증
+        if len(self.natural_language_request) < 10:
+            return {
+                'error': '분석 요청이 너무 짧습니다. 더 구체적으로 설명해주세요.',
+                'requires_input': True,
+                'question': "분석하고 싶은 내용을 자세히 설명해주세요:"
+            }
+        
+        # RAG 시스템 활성화로 전환
+        return self._transition_to_rag_activation()
+    
+    def _handle_rag_system_activation(self) -> Dict:
+        """RAG 시스템 활성화 처리"""
+        self.logger.info("Enhanced RAG 시스템 활성화 시작")
+        
+        try:
+            # 비즈니스 지식 검색
+            self.business_context = self.rag_manager.search_business_knowledge(
+                self.natural_language_request
+            )
+            
+            # 데이터 컨텍스트 준비
+            data_context = self._prepare_data_context()
+            
+            # DB 스키마 구조 검색
+            self.schema_context = self.rag_manager.search_schema_context(
+                data_context
+            )
+            
+            self.logger.info("RAG 시스템 활성화 완료")
+            
+            # AI 추천 생성으로 전환
+            return self._transition_to_ai_recommendation()
+            
+        except Exception as e:
+            self.logger.error(f"RAG 시스템 활성화 오류: {e}")
+            return {
+                'error': f'RAG 시스템 오류: {str(e)}',
+                'requires_input': True,
+                'question': "계속하시겠습니까? (y/n)"
+            }
+    
+    def _handle_ai_recommendation_generation(self) -> Dict:
+        """AI 기반 분석 방법 추천 생성"""
+        self.logger.info("AI 분석 방법 추천 생성 시작")
+        
+        try:
+            # 데이터 요약 준비
+            data_summary = self._get_comprehensive_data_summary()
+            
+            # AI 추천 생성
+            self.ai_recommendations = self.analysis_recommender.generate_recommendations(
+                natural_language_request=self.natural_language_request,
+                data_summary=data_summary,
+                business_context=self.business_context,
+                schema_context=self.schema_context
+            )
+            
+            self.logger.info(f"AI 추천 {len(self.ai_recommendations)}개 생성 완료")
+            
+            # 추천 표시로 전환
+            return self._transition_to_recommendation_display()
+            
+        except Exception as e:
+            self.logger.error(f"AI 추천 생성 오류: {e}")
+            return {
+                'error': f'AI 추천 생성 실패: {str(e)}',
+                'fallback_recommendations': self._get_fallback_recommendations()
+            }
+    
+    def _handle_recommendation_display(self) -> Dict:
+        """추천 방법 표시 및 사용자 선택 처리"""
+        if not self.ai_recommendations:
+            return {
+                'error': '추천 방법이 없습니다.',
+                'requires_input': True,
+                'question': "분석 요청을 다시 입력해주세요:"
+            }
+        
+        # 추천 결과 포맷팅
+        formatted_recommendations = self._format_recommendations_for_display()
+        
+        return {
+            'recommendations': formatted_recommendations,
+            'requires_input': True,
+            'question': "선택하실 방법 번호를 입력해주세요 (1-3):",
+            'current_node': 'recommendation_display'
+        }
+    
+    def _handle_method_confirmation(self, user_input: str) -> Dict:
+        """선택된 분석 방법 확정"""
+        try:
+            selection = int(user_input.strip())
+            if 1 <= selection <= len(self.ai_recommendations):
+                self.selected_recommendation = self.ai_recommendations[selection - 1]
+                
+                # 분석 실행으로 전환
+                return self._transition_to_analysis_execution()
+            else:
+                return {
+                    'error': f'1-{len(self.ai_recommendations)} 범위의 숫자를 입력해주세요.',
+                    'requires_input': True,
+                    'question': "다시 선택해주세요:"
+                }
+        except ValueError:
+            return {
+                'error': '숫자를 입력해주세요.',
+                'requires_input': True,
+                'question': "방법 번호를 입력해주세요:"
+            }
+    
+    def _handle_session_continuation(self, user_input: str) -> Dict:
+        """세션 지속 또는 종료 처리"""
+        user_input_lower = user_input.lower().strip()
+        
+        if user_input_lower in ['y', 'yes', '예', '네', '계속']:
+            # 새로운 분석 요청으로 돌아가기
+            return self._transition_to_natural_language_request()
+        elif user_input_lower in ['n', 'no', '아니오', '종료', 'exit']:
+            return self._end_session()
+        elif user_input_lower in ['다른', 'other', '새로운', 'new']:
+            # 다른 데이터로 분석
+            return self._transition_to_data_selection()
+        else:
+            return {
+                'error': 'y(계속)/n(종료)/other(다른 데이터) 중 하나를 선택해주세요.',
+                'requires_input': True,
+                'question': "추가 분석을 하시겠습니까? (y/n/other):"
+            }
+
+    def _prepare_data_context(self) -> Dict:
+        """RAG 시스템을 위한 데이터 컨텍스트 준비"""
         if self.raw_data is None:
-            return {"error": "데이터가 로드되지 않았습니다."}
+            return {}
         
-        # 데이터 프로파일링
-        data_profile = self.data_loader.get_data_profile(self.raw_data)
-        
-        # 분석 파라미터에 추가
-        self.analysis_parameters.update({
-            'data_profile': data_profile,
-            'data_shape': self.raw_data.shape
-        })
-        
-        return data_profile
+        return {
+            'columns': list(self.raw_data.columns),
+            'dtypes': {col: str(dtype) for col, dtype in self.raw_data.dtypes.items()},
+            'shape': self.raw_data.shape,
+            'sample_data': self.raw_data.head().to_dict()
+        }
     
-    def _handle_code_execution(self, node_details: Dict) -> Dict:
-        """통계 코드 실행 처리"""
-        # 적합한 코드 스니펫 검색
-        query_description = self._build_code_search_query()
-        code_snippets = self.code_retriever.find_relevant_code_snippets(
-            query_description=query_description,
-            required_variables=self.analysis_parameters.get('variables', [])
-        )
-        
-        if not code_snippets:
-            return {"error": "적합한 코드 스니펫을 찾을 수 없습니다."}
-        
-        # 가장 관련성 높은 코드 실행
-        best_code = code_snippets[0]['content']
-        
-        execution_result = self.safe_code_executor.execute_code(
-            code_string=best_code,
-            input_dataframe=self.processed_data or self.raw_data,
-            parameters=self.analysis_parameters
-        )
-        
-        return execution_result
+    def _format_recommendations_for_display(self) -> List[Dict]:
+        """AI 추천을 사용자 표시용으로 포맷팅"""
+        formatted = []
+        for i, rec in enumerate(self.ai_recommendations, 1):
+            formatted.append({
+                'number': i,
+                'method': rec.method_name,
+                'confidence': rec.confidence_score,
+                'reasoning': rec.reasoning,
+                'business_context': rec.business_interpretation,
+                'schema_considerations': rec.schema_considerations
+            })
+        return formatted
     
-    def _handle_default_node(self, node_details: Dict) -> str:
-        """기본 노드 처리"""
-        return "processed"
+    def _transition_to_data_overview(self) -> Dict:
+        """데이터 개요로 전환"""
+        self.current_node_id = 'data_overview'
+        return {
+            'node_transition': 'data_overview',
+            'message': '데이터 로딩이 완료되었습니다.',
+            'data_info': self._get_data_summary(),
+            'auto_proceed': True
+        }
     
-    def _determine_next_node(self, execution_result: Any) -> Optional[str]:
-        """다음 노드 결정"""
-        current_node = self.workflow_manager.get_node(self.current_node_id)
-        
-        next_node_id = self.decision_engine.determine_next_node(
-            current_node_details=current_node,
-            execution_outcome=execution_result,
-            user_response=execution_result if isinstance(execution_result, str) else None
-        )
-        
-        return next_node_id
+    def _transition_to_rag_activation(self) -> Dict:
+        """RAG 시스템 활성화로 전환"""
+        self.current_node_id = 'rag_system_activation'
+        return {
+            'node_transition': 'rag_system_activation',
+            'message': 'Enhanced RAG 시스템을 활성화합니다...',
+            'auto_proceed': True
+        }
     
-    def _update_analysis_parameters_from_response(self, response: str):
-        """LLM 응답에서 분석 파라미터 추출 및 업데이트"""
-        # 간단한 키워드 기반 파라미터 추출 (추후 더 정교하게 구현)
-        if '종속변수' in response or 'dependent' in response.lower():
-            # 종속변수 추출 로직
-            pass
-        if '독립변수' in response or 'independent' in response.lower():
-            # 독립변수 추출 로직
-            pass
+    def _transition_to_ai_recommendation(self) -> Dict:
+        """AI 추천 생성으로 전환"""
+        self.current_node_id = 'ai_recommendation_generation'
+        return {
+            'node_transition': 'ai_recommendation_generation',
+            'message': 'AI가 최적의 분석 방법을 추천하고 있습니다...',
+            'auto_proceed': True
+        }
     
+    def _transition_to_recommendation_display(self) -> Dict:
+        """추천 표시로 전환"""
+        self.current_node_id = 'recommendation_display'
+        return self._handle_recommendation_display()
+    
+    def _transition_to_analysis_execution(self) -> Dict:
+        """분석 실행으로 전환"""
+        self.current_node_id = 'automated_preprocessing'
+        return {
+            'node_transition': 'automated_preprocessing',
+            'message': f'선택된 방법({self.selected_recommendation.method_name})으로 분석을 시작합니다...',
+            'selected_method': self.selected_recommendation.method_name,
+            'auto_proceed': True
+        }
+    
+    def _transition_to_natural_language_request(self) -> Dict:
+        """자연어 요청으로 전환"""
+        self.current_node_id = 'natural_language_request'
+        return {
+            'node_transition': 'natural_language_request',
+            'message': '새로운 분석 요청을 입력해주세요.',
+            'requires_input': True,
+            'question': "분석하고 싶은 내용을 자연어로 설명해주세요:"
+        }
+    
+    def _transition_to_data_selection(self) -> Dict:
+        """데이터 선택으로 전환"""
+        self.current_node_id = 'data_selection'
+        return {
+            'node_transition': 'data_selection',
+            'message': '새로운 데이터를 선택해주세요.',
+            'requires_input': True,
+            'question': "분석할 데이터 파일을 선택해주세요:"
+        }
+    
+    def _get_next_action_description(self) -> str:
+        """현재 노드에서 다음 필요한 액션 설명"""
+        if self.current_node_id == 'start':
+            return "데이터 선택이 필요합니다."
+        elif self.current_node_id == 'data_selection':
+            return "분석할 데이터 파일을 선택해주세요."
+        elif self.current_node_id == 'natural_language_request':
+            return "분석 요청을 자연어로 입력해주세요."
+        else:
+            return f"현재 단계: {self.current_node_id}"
+    
+    def _get_fallback_recommendations(self) -> List[Dict]:
+        """AI 추천 실패 시 기본 추천"""
+        return [
+            {
+                'method': '기술통계 분석',
+                'confidence': 0.8,
+                'reasoning': '데이터의 기본적인 분포와 특성을 파악합니다.'
+            },
+            {
+                'method': '상관관계 분석',
+                'confidence': 0.7,
+                'reasoning': '변수 간의 관계를 탐색합니다.'
+            }
+        ]
+
+    # ... existing code ...
+
     def _get_data_summary(self) -> Dict:
         """현재 데이터 요약 정보 반환"""
         if self.raw_data is None:
@@ -319,49 +461,107 @@ class LLMAgent:
             'missing_values': self.raw_data.isnull().sum().to_dict()
         }
     
-    def _build_code_search_query(self) -> str:
-        """코드 검색을 위한 쿼리 구성"""
-        query_parts = []
-        
-        if 'test_type' in self.analysis_parameters:
-            query_parts.append(self.analysis_parameters['test_type'])
-        
-        if 'variables' in self.analysis_parameters:
-            query_parts.append("변수 분석")
-        
-        return " ".join(query_parts) if query_parts else "통계 검정"
+    def _format_recommendations_for_display(self) -> List[Dict]:
+        """AI 추천을 사용자 표시용으로 포맷팅"""
+        formatted = []
+        for i, rec in enumerate(self.ai_recommendations, 1):
+            formatted.append({
+                'number': i,
+                'method': rec.method_name,
+                'confidence': rec.confidence_score,
+                'reasoning': rec.reasoning,
+                'business_context': rec.business_interpretation,
+                'schema_considerations': rec.schema_considerations
+            })
+        return formatted
     
-    def _log_state_transition(self, from_node: str, to_node: str, reason: str):
-        """상태 전이 로깅"""
-        self.logger.info(f"상태 전이: {from_node} -> {to_node} (이유: {reason})")
-        
-        # 사용자 상호작용 이력에 추가
-        self.user_interaction_history.append({
-            'timestamp': datetime.now().isoformat(),
-            'from_node': from_node,
-            'to_node': to_node,
-            'reason': reason
-        })
-    
-    def _generate_final_report(self) -> str:
-        """최종 보고서 생성"""
-        # 전체 이력 수집
-        full_history = self.context_manager.get_full_history_for_report()
-        
-        # 최종 상태 정보
-        agent_final_state = {
-            'analysis_parameters': self.analysis_parameters,
-            'data_summary': self._get_data_summary(),
-            'final_node': self.current_node_id,
-            'interaction_history': self.user_interaction_history
+    def _transition_to_data_overview(self) -> Dict:
+        """데이터 개요로 전환"""
+        self.current_node_id = 'data_overview'
+        return {
+            'node_transition': 'data_overview',
+            'message': '데이터 로딩이 완료되었습니다.',
+            'data_info': self._get_data_summary(),
+            'auto_proceed': True
         }
-        
-        # 보고서 생성
-        report_path = self.report_generator.generate_report(
-            agent_final_state=agent_final_state,
-            full_interaction_history=full_history,
-            data_profile=self.analysis_parameters.get('data_profile', {}),
-            workflow_graph_info={'final_node': self.current_node_id}
-        )
-        
-        return report_path 
+    
+    def _transition_to_rag_activation(self) -> Dict:
+        """RAG 시스템 활성화로 전환"""
+        self.current_node_id = 'rag_system_activation'
+        return {
+            'node_transition': 'rag_system_activation',
+            'message': 'Enhanced RAG 시스템을 활성화합니다...',
+            'auto_proceed': True
+        }
+    
+    def _transition_to_ai_recommendation(self) -> Dict:
+        """AI 추천 생성으로 전환"""
+        self.current_node_id = 'ai_recommendation_generation'
+        return {
+            'node_transition': 'ai_recommendation_generation',
+            'message': 'AI가 최적의 분석 방법을 추천하고 있습니다...',
+            'auto_proceed': True
+        }
+    
+    def _transition_to_recommendation_display(self) -> Dict:
+        """추천 표시로 전환"""
+        self.current_node_id = 'recommendation_display'
+        return self._handle_recommendation_display()
+    
+    def _transition_to_analysis_execution(self) -> Dict:
+        """분석 실행으로 전환"""
+        self.current_node_id = 'automated_preprocessing'
+        return {
+            'node_transition': 'automated_preprocessing',
+            'message': f'선택된 방법({self.selected_recommendation.method_name})으로 분석을 시작합니다...',
+            'selected_method': self.selected_recommendation.method_name,
+            'auto_proceed': True
+        }
+    
+    def _transition_to_natural_language_request(self) -> Dict:
+        """자연어 요청으로 전환"""
+        self.current_node_id = 'natural_language_request'
+        return {
+            'node_transition': 'natural_language_request',
+            'message': '새로운 분석 요청을 입력해주세요.',
+            'requires_input': True,
+            'question': "분석하고 싶은 내용을 자연어로 설명해주세요:"
+        }
+    
+    def _transition_to_data_selection(self) -> Dict:
+        """데이터 선택으로 전환"""
+        self.current_node_id = 'data_selection'
+        return {
+            'node_transition': 'data_selection',
+            'message': '새로운 데이터를 선택해주세요.',
+            'requires_input': True,
+            'question': "분석할 데이터 파일을 선택해주세요:"
+        }
+    
+    def _get_next_action_description(self) -> str:
+        """현재 노드에서 다음 필요한 액션 설명"""
+        if self.current_node_id == 'start':
+            return "데이터 선택이 필요합니다."
+        elif self.current_node_id == 'data_selection':
+            return "분석할 데이터 파일을 선택해주세요."
+        elif self.current_node_id == 'natural_language_request':
+            return "분석 요청을 자연어로 입력해주세요."
+        else:
+            return f"현재 단계: {self.current_node_id}"
+    
+    def _get_fallback_recommendations(self) -> List[Dict]:
+        """AI 추천 실패 시 기본 추천"""
+        return [
+            {
+                'method': '기술통계 분석',
+                'confidence': 0.8,
+                'reasoning': '데이터의 기본적인 분포와 특성을 파악합니다.'
+            },
+            {
+                'method': '상관관계 분석',
+                'confidence': 0.7,
+                'reasoning': '변수 간의 관계를 탐색합니다.'
+            }
+        ]
+
+    # ... existing code continues with all other methods ... 

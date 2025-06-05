@@ -1,0 +1,69 @@
+# Git 관련
+.git
+.gitignore
+
+# Python 캐시
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 가상환경
+.venv/
+venv/
+env/
+
+# IDE 설정
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 로그 파일
+logs/
+*.log
+
+# 환경 설정 (보안상 제외)
+.env
+*.env
+
+# 임시 파일
+*.tmp
+*.temp
+
+# 입력 데이터 (용량 고려)
+input_data/*.hyper
+input_data/*.csv
+input_data/*.xlsx
+
+# 결과 파일
+output_results/*.md
+output_results/*.html
+output_results/*.json
+output_results/*.png
+output_results/*.jpg
+
+# RAG 인덱스 (재구축 필요)
+resources/rag_index/*
+
+# OS 관련
+.DS_Store
+Thumbs.db
+
+# Docker 관련
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 개발 도구
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter 노트북
+.ipynb_checkpoints/
+notebooks/
+
+# 문서
+README.md
+docs/ 

@@ -1,8 +1,8 @@
 """
-ContextManager: Agent의 장기 기억 및 작업 메모리 관리
+ContextManager: Enhanced RAG 기반 Agent의 장기 기억 및 작업 메모리 관리
 
-LLM과의 상호작용 및 주요 분석 단계의 이력을 관리하고,
-토큰 제한을 고려하여 이력을 요약하거나 필터링하여 
+LLM과의 상호작용, 주요 분석 단계의 이력, Enhanced RAG 시스템의 비즈니스 컨텍스트 및 
+DB 스키마 정보를 관리하고, 토큰 제한을 고려하여 이력을 요약하거나 필터링하여 
 LLM에 전달할 컨텍스트를 최적화합니다.
 """
 
@@ -14,17 +14,17 @@ import json
 
 class ContextManager:
     """
-    Agent의 장기 기억 및 작업 메모리 관리자
+    Enhanced RAG 기반 Agent의 장기 기억 및 작업 메모리 관리자
     
-    대화 이력과 분석 과정을 관리하며, LLM 토큰 제한을 고려한 
-    컨텍스트 최적화 기능을 제공합니다.
+    대화 이력, 분석 과정, 비즈니스 컨텍스트, DB 스키마 정보를 관리하며, 
+    LLM 토큰 제한을 고려한 컨텍스트 최적화 기능을 제공합니다.
     """
     
     def __init__(self, llm_client, max_history_items: int = 20, 
                  summarization_trigger_count: int = 10, 
                  context_token_limit: int = 3000):
         """
-        ContextManager 초기화
+        Enhanced RAG 기반 ContextManager 초기화
         
         Args:
             llm_client: 요약용 LLM 클라이언트
@@ -40,6 +40,19 @@ class ContextManager:
         # 상호작용 이력 저장
         self._interaction_history: List[Dict] = []
         
+        # Enhanced RAG 컨텍스트 저장
+        self._business_context: Dict = {}
+        self._schema_context: Dict = {}
+        self._rag_search_history: List[Dict] = []
+        
+        # 분석 상태 컨텍스트
+        self._analysis_context: Dict = {
+            'natural_language_request': '',
+            'selected_method': '',
+            'data_summary': {},
+            'ai_recommendations': []
+        }
+        
         # 요약 캐시
         self._summary_cache: str = ""
         self._last_summarized_index: int = 0
@@ -47,20 +60,23 @@ class ContextManager:
         # 로깅 설정
         self.logger = logging.getLogger(__name__)
     
-    def add_interaction(self, role: str, content: str, node_id: str):
+    def add_interaction(self, role: str, content: str, node_id: str, 
+                       metadata: Optional[Dict] = None):
         """
         새로운 상호작용을 이력에 추가합니다.
         
         Args:
-            role: 역할 ('user', 'assistant', 'system')
+            role: 역할 ('user', 'assistant', 'system', 'rag')
             content: 상호작용 내용
             node_id: 현재 워크플로우 노드 ID
+            metadata: 추가 메타데이터 (RAG 검색 결과 등)
         """
         interaction = {
             'role': role,
             'content': content,
             'node_id': node_id,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'metadata': metadata or {}
         }
         
         self._interaction_history.append(interaction)
@@ -75,27 +91,82 @@ class ContextManager:
         if len(self._interaction_history) > self.max_history_items:
             self._prune_history()
     
+    def add_business_context(self, context_data: Dict):
+        """
+        비즈니스 컨텍스트 정보를 추가합니다.
+        
+        Args:
+            context_data: 비즈니스 컨텍스트 데이터
+        """
+        self._business_context.update(context_data)
+        self.logger.debug("비즈니스 컨텍스트 업데이트됨")
+        
+        # RAG 검색 이력에 추가
+        self._rag_search_history.append({
+            'type': 'business_context',
+            'timestamp': datetime.now().isoformat(),
+            'data': context_data
+        })
+    
+    def add_schema_context(self, schema_data: Dict):
+        """
+        DB 스키마 컨텍스트 정보를 추가합니다.
+        
+        Args:
+            schema_data: DB 스키마 컨텍스트 데이터
+        """
+        self._schema_context.update(schema_data)
+        self.logger.debug("스키마 컨텍스트 업데이트됨")
+        
+        # RAG 검색 이력에 추가
+        self._rag_search_history.append({
+            'type': 'schema_context',
+            'timestamp': datetime.now().isoformat(),
+            'data': schema_data
+        })
+    
+    def update_analysis_context(self, key: str, value: Any):
+        """
+        분석 상태 컨텍스트를 업데이트합니다.
+        
+        Args:
+            key: 컨텍스트 키
+            value: 업데이트할 값
+        """
+        self._analysis_context[key] = value
+        self.logger.debug(f"분석 컨텍스트 업데이트: {key}")
+    
     def get_optimized_context(self, current_task_prompt: str, 
-                            required_recent_interactions: int = 5) -> str:
+                            required_recent_interactions: int = 5,
+                            include_rag_context: bool = True) -> str:
         """
         LLM에 전달할 최적화된 컨텍스트 문자열을 반환합니다.
         
         Args:
             current_task_prompt: 현재 작업 프롬프트
             required_recent_interactions: 포함할 최근 상호작용 수
+            include_rag_context: RAG 컨텍스트 포함 여부
             
         Returns:
             str: 최적화된 컨텍스트 문자열
         """
         context_parts = []
         
-        # 1. 요약된 이전 이력 추가
+        # 1. Enhanced RAG 컨텍스트 추가
+        if include_rag_context:
+            rag_context = self._build_rag_context()
+            if rag_context:
+                context_parts.append("=== Enhanced RAG 컨텍스트 ===")
+                context_parts.append(rag_context)
+                context_parts.append("")
+        
+        # 2. 요약된 이전 이력 추가
         if self._summary_cache:
             context_parts.append("=== 이전 분석 과정 요약 ===")
             context_parts.append(self._summary_cache)
             context_parts.append("")
         
-        # 2. 최근 상호작용 추가
+        # 3. 최근 상호작용 추가
         recent_interactions = self._get_recent_interactions(required_recent_interactions)
         if recent_interactions:
             context_parts.append("=== 최근 상호작용 ===")
@@ -104,7 +175,14 @@ class ContextManager:
                 context_parts.append(formatted_interaction)
             context_parts.append("")
         
-        # 3. 현재 작업 추가
+        # 4. 현재 분석 상태 추가
+        analysis_state = self._build_analysis_state_summary()
+        if analysis_state:
+            context_parts.append("=== 현재 분석 상태 ===")
+            context_parts.append(analysis_state)
+            context_parts.append("")
+        
+        # 5. 현재 작업 추가
         context_parts.append("=== 현재 작업 ===")
         context_parts.append(current_task_prompt)
         
@@ -116,14 +194,20 @@ class ContextManager:
         
         return optimized_context
     
-    def get_full_history_for_report(self) -> List[Dict]:
+    def get_rag_context_summary(self) -> Dict[str, Any]:
         """
-        최종 보고서 생성을 위해 전체 원본 이력을 반환합니다.
+        Enhanced RAG 컨텍스트 요약을 반환합니다.
         
         Returns:
-            List[Dict]: 전체 상호작용 이력
+            Dict: RAG 컨텍스트 요약 정보
         """
-        return self._interaction_history.copy()
+        return {
+            'business_context_keys': list(self._business_context.keys()),
+            'schema_context_keys': list(self._schema_context.keys()),
+            'rag_searches_count': len(self._rag_search_history),
+            'last_business_update': self._get_last_context_update('business_context'),
+            'last_schema_update': self._get_last_context_update('schema_context')
+        }
     
     def get_analysis_summary(self) -> Dict[str, Any]:
         """
@@ -153,11 +237,62 @@ class ContextManager:
             'role_distribution': role_counts,
             'visited_nodes': visited_nodes,
             'current_summary': self._summary_cache,
+            'analysis_context': self._analysis_context,
+            'rag_context_summary': self.get_rag_context_summary(),
             'analysis_start_time': (self._interaction_history[0]['timestamp'] 
                                   if self._interaction_history else None),
             'last_interaction_time': (self._interaction_history[-1]['timestamp'] 
                                     if self._interaction_history else None)
         }
+    
+    def _build_rag_context(self) -> str:
+        """Enhanced RAG 컨텍스트를 구축합니다."""
+        rag_parts = []
+        
+        # 비즈니스 컨텍스트
+        if self._business_context:
+            rag_parts.append("🏢 비즈니스 컨텍스트:")
+            for key, value in self._business_context.items():
+                if isinstance(value, dict) and 'summary' in value:
+                    rag_parts.append(f"  • {key}: {value['summary']}")
+                elif isinstance(value, str) and len(value) < 200:
+                    rag_parts.append(f"  • {key}: {value}")
+        
+        # DB 스키마 컨텍스트
+        if self._schema_context:
+            if rag_parts:
+                rag_parts.append("")
+            rag_parts.append("🗄️ DB 스키마 컨텍스트:")
+            for key, value in self._schema_context.items():
+                if isinstance(value, dict) and 'summary' in value:
+                    rag_parts.append(f"  • {key}: {value['summary']}")
+                elif isinstance(value, str) and len(value) < 200:
+                    rag_parts.append(f"  • {key}: {value}")
+        
+        return "\n".join(rag_parts)
+    
+    def _build_analysis_state_summary(self) -> str:
+        """현재 분석 상태 요약을 구축합니다."""
+        state_parts = []
+        
+        if self._analysis_context['natural_language_request']:
+            state_parts.append(f"📝 사용자 요청: {self._analysis_context['natural_language_request']}")
+        
+        if self._analysis_context['selected_method']:
+            state_parts.append(f"🔬 선택된 방법: {self._analysis_context['selected_method']}")
+        
+        if self._analysis_context['ai_recommendations']:
+            rec_count = len(self._analysis_context['ai_recommendations'])
+            state_parts.append(f"🤖 AI 추천: {rec_count}개 방법 제시됨")
+        
+        return "\n".join(state_parts)
+    
+    def _get_last_context_update(self, context_type: str) -> Optional[str]:
+        """특정 컨텍스트 유형의 마지막 업데이트 시간을 반환합니다."""
+        for search in reversed(self._rag_search_history):
+            if search['type'] == context_type:
+                return search['timestamp']
+        return None
     
     def _get_recent_interactions(self, count: int) -> List[Dict]:
         """최근 상호작용들을 반환합니다."""

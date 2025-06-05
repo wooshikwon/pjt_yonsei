@@ -1,7 +1,7 @@
 """
 DataLoader: 데이터 로딩 및 기본 정보 추출
 
-Tableau .hyper, CSV 등 다양한 형식의 데이터 파일을 로드하고
+CSV, Excel, Parquet 등 일반적인 형식의 데이터 파일을 로드하고
 통계 분석에 필요한 기본 정보를 추출합니다.
 """
 
@@ -28,9 +28,9 @@ class DataLoader:
             '.csv': self._load_csv,
             '.xlsx': self._load_excel,
             '.xls': self._load_excel,
-            '.hyper': self._load_hyper,
             '.json': self._load_json,
-            '.parquet': self._load_parquet
+            '.parquet': self._load_parquet,
+            '.pq': self._load_parquet  # parquet 파일의 다른 확장자
         }
     
     def load_data(self, file_path: str, file_type: str = None, **kwargs) -> pd.DataFrame:
@@ -55,7 +55,8 @@ class DataLoader:
             file_type = file_path.suffix.lower()
         
         if file_type not in self.supported_formats:
-            raise ValueError(f"지원하지 않는 파일 형식: {file_type}")
+            supported = ', '.join(self.supported_formats.keys())
+            raise ValueError(f"지원하지 않는 파일 형식: {file_type}. 지원 형식: {supported}")
         
         self.logger.info(f"데이터 로딩 시작: {file_path} ({file_type})")
         
@@ -67,6 +68,10 @@ class DataLoader:
             # 기본 검증
             if dataframe.empty:
                 self.logger.warning("로드된 데이터가 비어있습니다.")
+                return dataframe
+            
+            # 컬럼명 정리 (공백 제거, 특수문자 처리)
+            dataframe.columns = dataframe.columns.str.strip()
             
             self.logger.info(f"데이터 로딩 완료: {dataframe.shape[0]}행 {dataframe.shape[1]}열")
             return dataframe
@@ -89,7 +94,13 @@ class DataLoader:
             # 인코딩 문제시 다른 인코딩 시도
             self.logger.warning("UTF-8 인코딩 실패, cp949로 재시도")
             default_options['encoding'] = 'cp949'
-            return pd.read_csv(file_path, **default_options)
+            try:
+                return pd.read_csv(file_path, **default_options)
+            except UnicodeDecodeError:
+                # 마지막 시도: 자동 감지
+                self.logger.warning("cp949 인코딩도 실패, latin-1로 재시도")
+                default_options['encoding'] = 'latin-1'
+                return pd.read_csv(file_path, **default_options)
     
     def _load_excel(self, file_path: Path, **kwargs) -> pd.DataFrame:
         """Excel 파일 로드"""
@@ -98,19 +109,17 @@ class DataLoader:
         }
         default_options.update(kwargs)
         
-        return pd.read_excel(file_path, **default_options)
-    
-    def _load_hyper(self, file_path: Path, **kwargs) -> pd.DataFrame:
-        """Tableau Hyper 파일 로드"""
         try:
-            import pantab
-            return pantab.frame_from_hyper(str(file_path), **kwargs)
-        except ImportError:
-            self.logger.error("pantab 라이브러리가 설치되지 않았습니다. pip install pantab 실행 필요")
-            raise
+            return pd.read_excel(file_path, **default_options)
         except Exception as e:
-            self.logger.error(f"Hyper 파일 로딩 실패: {e}")
-            raise
+            # 다른 엔진으로 재시도
+            if default_options['engine'] == 'openpyxl':
+                self.logger.warning("openpyxl 엔진 실패, xlrd로 재시도")
+                default_options['engine'] = 'xlrd'
+            else:
+                self.logger.warning("xlrd 엔진 실패, openpyxl로 재시도")
+                default_options['engine'] = 'openpyxl'
+            return pd.read_excel(file_path, **default_options)
     
     def _load_json(self, file_path: Path, **kwargs) -> pd.DataFrame:
         """JSON 파일 로드"""
@@ -119,11 +128,30 @@ class DataLoader:
         }
         default_options.update(kwargs)
         
-        return pd.read_json(file_path, **default_options)
+        try:
+            return pd.read_json(file_path, **default_options)
+        except ValueError:
+            # orient 옵션을 다르게 시도
+            for orient in ['index', 'values', 'split', 'table']:
+                try:
+                    default_options['orient'] = orient
+                    self.logger.info(f"JSON 로딩: orient={orient}로 재시도")
+                    return pd.read_json(file_path, **default_options)
+                except:
+                    continue
+            raise ValueError("JSON 파일을 로드할 수 없습니다. 파일 형식을 확인해주세요.")
     
     def _load_parquet(self, file_path: Path, **kwargs) -> pd.DataFrame:
         """Parquet 파일 로드"""
-        return pd.read_parquet(file_path, **kwargs)
+        try:
+            return pd.read_parquet(file_path, **kwargs)
+        except ImportError:
+            self.logger.error("pyarrow 또는 fastparquet 라이브러리가 설치되지 않았습니다.")
+            self.logger.error("다음 명령어로 설치하세요: pip install pyarrow")
+            raise
+        except Exception as e:
+            self.logger.error(f"Parquet 파일 로딩 실패: {e}")
+            raise
     
     def get_data_profile(self, dataframe: pd.DataFrame, 
                         unique_threshold: int = 10) -> Dict[str, Any]:

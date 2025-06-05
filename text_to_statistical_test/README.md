@@ -1,264 +1,789 @@
+# 📊 Text-to-Statistical-Test: 비즈니스 컨텍스트 인식 AI 통계 분석 시스템
+
+**한국어 자연어 기반 다중턴 대화형 통계 분석 자동화 시스템 with Enhanced RAG**
+
+비즈니스 도메인 전문 지식과 데이터베이스 스키마 구조를 활용한 지능형 통계 분석 워크플로우
+
+---
+
+## 🚀 핵심 특징
+
+### 📈 지능형 AI 추천 시스템
+- **자연어 요청 이해**: 일반 언어로 분석 요구사항 입력
+- **컨텍스트 인식 추천**: 비즈니스 도메인 지식을 바탕으로 한 AI 분석 방법 추천
+- **자동 검정 수행**: 정규성, 등분산성 검정 등 통계적 가정 자동 확인
+
+### 🏢 비즈니스 도메인 특화 RAG 시스템
+- **업계 전문 지식**: 도메인별 비즈니스 용어사전 및 분석 가이드라인
+- **DB 스키마 검색**: 데이터베이스 구조 및 테이블 관계 정보 활용
+- **이중언어 지원**: BCEmbedding 기반 한국어-영어 크로스링구얼 검색
+
+### 🔄 다중턴 대화 워크플로우
+- **단계별 진행**: 데이터 선택 → 자연어 요청 → AI 추천 → 자동 분석
+- **대화형 상호작용**: 각 단계에서 사용자와의 자연스러운 대화
+- **세션 관리**: 분석 과정 전체의 컨텍스트 유지
+
+---
+
+## 🏗️ 시스템 아키텍처
+
+### 📁 프로젝트 구조 및 주요 컴포넌트
+
+```
 text_to_statistical_test/
-├── main_runner.py                 # 애플리케이션 실행 스크립트 (CLI 인터페이스 등)
+├── 📁 core/                          # 🧠 핵심 엔진
+│   ├── agent.py                      # LLMAgent: 다중턴 대화 오케스트레이션
+│   ├── workflow_manager.py           # WorkflowManager: 워크플로우 상태 관리
+│   ├── context_manager.py            # ContextManager: 세션 컨텍스트 관리
+│   └── decision_engine.py            # DecisionEngine: AI 의사결정 엔진
 │
-├── core/
-│   ├── __init__.py
-│   ├── agent.py                   # LLMAgent: 워크플로우 오케스트레이션, 상태, 컨텍스트 관리
-│   ├── workflow_manager.py        # WorkflowManager: JSON 워크플로우 로드, 파싱, 노드 정보 제공
-│   ├── decision_engine.py         # DecisionEngine: LLM 응답, 사용자 입력 기반 조건 판단 및 다음 노드 결정
-│   └── context_manager.py         # ContextManager: 대화/분석 이력 관리, 요약, 토큰 최적화 (신규)
+├── 📁 llm_services/                  # 🤖 LLM 서비스
+│   ├── llm_client.py                 # LLMClient: OpenAI API 클라이언트
+│   ├── prompt_crafter.py             # PromptCrafter: 동적 프롬프트 생성
+│   └── prompts/                      # 📝 프롬프트 템플릿 모음
 │
-├── llm_services/
-│   ├── __init__.py
-│   ├── llm_client.py              # LLMClient: LLM API 연동 (OpenAI, Gemini 등)
-│   ├── prompt_crafter.py          # PromptCrafter: 템플릿 기반 상황별 프롬프트 생성 전문
-│   └── prompts/                   # (신규 디렉토리) 프롬프트 템플릿 저장
-│       ├── common/
-│       │   └── output_format_instructions.md
-│       ├── stage_1_user_understanding/
-│       │   ├── 1_1_analyze_user_request.md
-│       │   └── 1_2_confirm_analysis_goal.j2 # Jinja2 템플릿 예시
-│       └── ... (기타 단계별/목적별 프롬프트 템플릿)
+├── 📁 rag_system/                    # 🔍 Enhanced RAG 시스템
+│   ├── business_retriever.py         # BusinessRetriever: 비즈니스 지식 검색 [NEW]
+│   ├── schema_retriever.py           # SchemaRetriever: DB 스키마 구조 검색 [NEW]
+│   └── rag_manager.py                # RAGManager: RAG 통합 관리자 [NEW]
 │
-├── data_processing/
-│   ├── __init__.py
-│   └── data_loader.py             # DataLoader: Tableau 등 데이터 로드 및 기본 정보 추출
+├── 📁 utils/                         # 🛠️ 유틸리티
+│   ├── analysis_recommender.py       # AnalysisRecommender: AI 추천 엔진
+│   ├── workflow_utils.py             # 워크플로우 유틸리티 함수
+│   ├── ui_helpers.py                 # UI 헬퍼 함수
+│   ├── data_utils.py                 # 데이터 처리 유틸리티
+│   └── system_setup.py               # 시스템 설정 유틸리티
 │
-├── rag_system/
-│   ├── __init__.py
-│   ├── code_retriever.py          # CodeRetriever: 코드 스니펫 검색 (Vector DB 연동 등)
-│   └── code_indexer.py            # CodeIndexer: (셋업 시 사용) 코드 스니펫 임베딩 및 인덱싱
+├── 📁 data_processing/               # 📊 데이터 처리
+│   └── data_loader.py                # DataLoader: 다양한 형식 데이터 로딩
 │
-├── code_execution/
-│   ├── __init__.py
-│   └── safe_code_executor.py      # SafeCodeExecutor: RAG로 검색된 통계 코드 안전하게 실행
+├── 📁 code_execution/                # ⚡ 코드 실행
+│   └── safe_code_executor.py         # SafeCodeExecutor: 안전한 코드 실행
 │
-├── reporting/
-│   ├── __init__.py
-│   └── report_generator.py        # ReportGenerator: 분석 결과 및 과정을 종합하여 보고서 생성
+├── 📁 reporting/                     # 📋 보고서 생성
+│   └── report_generator.py           # ReportGenerator: 분석 결과 보고서
 │
-├── resources/
-│   ├── workflow_graph.json        # 분기 그래프 (상태 및 전환 로직)
-│   └── code_snippets/             # 생성된 통계 검정 예시 코드 저장 폴더 (RAG 대상)
-│       ├── t_test/
-│       │   └── independent_t_test_example_1.py
-│       └── ...
+├── 📁 resources/                     # 📚 리소스
+│   ├── workflow_graph.json           # 워크플로우 그래프 정의
+│   └── rag_index/                   # 🏢 비즈니스 지식베이스 [NEW]
 │
-├── input_data/
-│   └── your_data.hyper            # 입력 Tableau 데이터
+├── 📁 input_data/                    # 📥 입력 데이터
+│   ├── data_files/                  # 실제 분석 데이터
+│   └── metadata/                    # 비즈니스 컨텍스트 정보 [NEW]
+│       ├── business_dictionary.json  # 업계 용어사전
+│       ├── domain_knowledge.md       # 도메인 전문 지식
+│       ├── analysis_guidelines.md    # 분석 가이드라인
+│       └── database_schemas/         # DB 스키마 구조 정보 [NEW]
+│           ├── schema_definitions.json  # 테이블 구조 정의
+│           ├── relationship_maps.json   # 테이블 관계 매핑
+│           └── column_descriptions.json # 컬럼 상세 설명
 │
-├── output_results/
-│   └── analysis_report.md         # 최종 분석 보고서 (Markdown 등)
+├── 📁 config/                        # ⚙️ 설정
+│   └── settings.py                   # 시스템 설정 (OpenAI 전용)
 │
-├── config/
-│   ├── __init__.py  # 오타 수정 (init.py -> __init__.py)
-│   └── settings.py                # 환경변수 로드, 경로, 모델명, 로깅 설정 등
+├── 📁 logs/                          # 📜 로그
+├── 📁 output_results/               # 📤 출력 결과
+├── 📁 tests/                        # 🧪 테스트
 │
-├── .env                           # (Git에서 제외됨) 실제 API 키 및 민감 정보 저장
-├── .env.example                   # .env 파일 형식 예시
-└── .gitignore                     # Git 버전 관리 제외 목록
+├── main.py                          # 🚀 통합 진입점
+├── setup_project.py                # 🔧 프로젝트 설정 스크립트
+├── pyproject.toml                   # 📦 Poetry 의존성 관리
+├── docker-compose.yml              # 🐳 Docker 컨테이너 설정
+└── Dockerfile                      # 🐳 Docker 이미지 정의
+```
 
+---
 
-### 1. `main_runner.py`
+## 🧠 핵심 컴포넌트 상세
 
-- **기능**: 애플리케이션의 최상위 진입점. 의존성 설정, Agent 초기화 및 실행.
-- **역할**: 시스템 부트스트랩 및 실행 흐름 제어.
-- **주요 함수/클래스**:
-    - `setup_dependencies() -> dict`: 각 서비스(LLMClient, DataLoader, ContextManager 등)의 인스턴스를 생성하고, 설정값(`config.settings`)을 기반으로 초기화하여 딕셔너리 형태로 반환.
-    - `run_agent_workflow(dependencies: dict, input_data_path: str)`: `LLMAgent` 인스턴스를 생성(주입된 의존성 사용)하고, `agent.run(input_data_path)`를 호출하여 분석 워크플로우 시작.
-    - `main()`: CLI 인자 파싱 (예: `argparse` 사용), `setup_dependencies` 호출, `run_agent_workflow` 호출.
+### 1. 🎯 LLMAgent (core/agent.py)
+**다중턴 대화형 통계 분석의 중앙 컨트롤러**
 
-### 2. `core/agent.py`
+```python
+class LLMAgent:
+    """Multi-turn LLM Agent 기반 통계 검정 자동화 시스템의 핵심 클래스"""
+    
+    # 주요 메서드
+    def start_session(self) -> Dict           # 세션 시작
+    def process_user_input(self, input) -> Dict  # 사용자 입력 처리
+    def _handle_data_selection(self) -> Dict     # 데이터 선택 처리
+    def _handle_ai_recommendation_request(self) -> Dict  # AI 추천 요청 처리
+    def _handle_method_confirmation(self) -> Dict        # 방법 확인 처리
+    def _handle_multi_turn_interaction(self) -> Dict     # 다중턴 상호작용
+```
 
-- **기능**: 전체 통계 분석 워크플로우를 오케스트레이션. 현재 상태, 데이터, 분석 관련 중요 정보(변수, 가설 등) 및 대화/작업 이력을 관리.
-- **역할**: 중앙 컨트롤 타워. 상태 기계의 실행자.
-- **주요 함수/클래스**:
-    - `class LLMAgent`:
-        - `__init__(self, workflow_mngr: WorkflowManager, decision_eng: DecisionEngine, ctx_mngr: ContextManager, llm_cli: LLMClient, prompt_crftr: PromptCrafter, data_ldr: DataLoader, code_rtrvr: CodeRetriever, code_exec: SafeCodeExecutor, report_gen: ReportGenerator)`: 필요한 모든 서비스/매니저 의존성 주입.
-        - `current_node_id: str`: 현재 워크플로우 노드의 ID.
-        - `raw_data: pd.DataFrame`: 로드된 원본 데이터.
-        - `processed_data: pd.DataFrame`: 전처리/변환된 데이터.
-        - `analysis_parameters: dict`: 분석 과정에서 확정된 주요 파라미터 (예: 종속/독립 변수, 선택된 검정 방법, 가설 등).
-        - `user_interaction_history: list`: (선택적) 사용자 주요 결정/피드백 기록.
-        - `run(self, input_data_path: str) -> str`: 전체 분석 프로세스 시작. 데이터 로드, 초기 노드 설정, 메인 루프 실행. 최종 보고서 경로 반환.
-        - `_main_loop(self)`: 현재 노드 처리 -> 다음 노드 결정 -> 상태 전이 반복. 워크플로우 종료 조건 만족 시 루프 종료.
-        - `_process_current_node(self)`: 현재 `current_node_id`에 해당하는 노드의 작업을 수행.
-            - 노드 타입에 따라 LLM 질의, 사용자 입력 요청(CLI), 데이터 처리, 코드 실행, RAG 검색 등 다양한 액션 분기.
-            - LLM 질의 시 `context_manager.get_relevant_history()`를 통해 최적화된 컨텍스트 사용.
-            - 모든 상호작용(LLM, 사용자, 시스템 액션)은 `context_manager.add_interaction()`을 통해 기록.
-        - `_handle_llm_interaction(self, node_details: dict, current_prompt_context: dict) -> str`: 특정 노드에 대한 LLM 질의 수행. `prompt_crafter`로 프롬프트 생성, `llm_client`로 질의, 응답 반환.
-        - `_handle_user_confirmation(self, node_details: dict) -> str`: 사용자에게 확인/선택을 요청하는 노드 처리 (예: `input()`).
-        - `_handle_code_execution(self, node_details: dict) -> dict`: 통계 코드 실행 노드 처리. `code_retriever`로 코드 검색, `safe_code_executor`로 실행.
-        - `_update_analysis_parameters(self, new_params: dict)`: LLM 응답이나 사용자 결정에 따라 `analysis_parameters` 업데이트.
-        - `_log_state_transition(self, from_node: str, to_node: str, reason: str)`: 상태 전이 로깅.
+### 2. 🔍 Enhanced RAG System
 
-### 3. `core/workflow_manager.py`
+#### BusinessRetriever (rag_system/business_retriever.py) [NEW]
+**비즈니스 도메인 지식 검색 엔진**
 
-- **기능**: `resources/workflow_graph.json` 파일을 로드, 파싱하고, 워크플로우 노드 및 전환 규칙에 대한 접근 인터페이스 제공.
-- **역할**: 워크플로우 정의서 관리자.
-- **주요 함수/클래스**:
-    - `class WorkflowManager`:
-        - `__init__(self, workflow_file_path: str)`: 워크플로우 JSON 파일 경로를 받아 내부적으로 로드.
-        - `_workflow_definition: dict`: 로드된 JSON 데이터.
-        - `get_node(self, node_id: str) -> dict | None`: 특정 ID의 노드 정보(description, subtasks, transitions 등) 반환. 없으면 None.
-        - `get_initial_node_id(self) -> str`: 워크플로우 시작 노드 ID ("start") 반환.
-        - `is_terminal_node(self, node_id: str) -> bool`: 해당 노드가 종료 노드인지 (더 이상 `transitions`이 없는지 등) 확인.
+```python
+class BusinessRetriever:
+    """비즈니스 컨텍스트 인식 지식 검색"""
+    
+    def __init__(self, embedding_model="maidalun1020/bce-embedding-base_v1"):
+        # BCEmbedding: 한중 이중언어 + 비즈니스 도메인 최적화
+        
+    def search_business_knowledge(self, query: str) -> List[Dict]
+    def search_domain_terminology(self, terms: List[str]) -> Dict
+    def get_analysis_guidelines(self, domain: str) -> str
+```
 
-### 4. `core/decision_engine.py`
+#### SchemaRetriever (rag_system/schema_retriever.py) [NEW]
+**데이터베이스 스키마 구조 검색 엔진**
 
-- **기능**: 현재 노드의 처리 결과 (LLM 응답, 사용자 입력, 코드 실행 결과 등)와 해당 노드의 `transitions` 규칙을 비교하여 다음으로 진행할 노드 ID를 결정.
-- **역할**: 워크플로우 네비게이터.
-- **주요 함수/클래스**:
-    - `class DecisionEngine`:
-        - `determine_next_node(self, current_node_details: dict, execution_outcome: any, user_response: str = None) -> str | None`:
-            - `current_node_details`: 현재 노드의 전체 정보 (주로 `transitions` 필드 사용).
-            - `execution_outcome`: 가장 최근 작업의 결과 (예: LLM이 생성한 텍스트, 코드 실행 성공/실패, 특정 값).
-            - `user_response`: 사용자가 `input()` 등을 통해 제공한 응답.
-            - `transitions` 배열을 순회하며 각 `condition`을 `execution_outcome` 및 `user_response`와 비교 평가.
-            - 첫 번째로 만족하는 조건의 `next` 노드 ID를 반환. 만족하는 조건 없거나 에러 시 None 또는 예외 발생.
-        - `_evaluate_condition(self, condition_string: str, outcome: any, user_input: str) -> bool`: 복잡한 조건 문자열을 파싱하고 평가하는 로직. (예: "사용자 '예' AND 결과값 > 0.5")
+```python
+class SchemaRetriever:
+    """DB 스키마 및 테이블 관계 정보 검색"""
+    
+    def __init__(self, embedding_model="maidalun1020/bce-embedding-base_v1"):
+        # 스키마 구조 임베딩 및 검색 시스템
+        
+    def search_table_schema(self, table_name: str) -> Dict
+    def search_column_relationships(self, columns: List[str]) -> List[Dict]
+    def get_schema_context(self, data_columns: List[str]) -> Dict
+    def find_related_tables(self, primary_table: str) -> List[Dict]
+```
 
-### 5. `core/context_manager.py` (신규)
+#### RAGManager (rag_system/rag_manager.py) [NEW]
+**통합 RAG 시스템 관리자**
 
-- **기능**: LLM과의 상호작용 및 주요 분석 단계의 이력을 관리. 토큰 제한을 고려하여 이력을 요약하거나 필터링하여 LLM에 전달할 컨텍스트를 최적화.
-- **역할**: Agent의 장기 기억 및 작업 메모리 관리자.
-- **주요 함수/클래스**:
-    - `class ContextManager`:
-        - `__init__(self, llm_client: LLMClient, max_history_items: int = 20, summarization_trigger_count: int = 10, context_token_limit: int = 3000)`: LLM 클라이언트(요약용), 최대 저장할 상호작용 수, 요약 트리거 수, LLM 전달 컨텍스트 토큰 제한 설정.
-        - `_interaction_history: list[dict]`: 각 상호작용(`{'role': 'user/assistant/system', 'content': '...', 'node_id': '...', 'timestamp': '...'}`) 저장.
-        - `_summary_cache: str`: 가장 최근의 요약본.
-        - `add_interaction(self, role: str, content: str, node_id: str)`: 새로운 상호작용을 이력에 추가. `summarization_trigger_count` 도달 시 자동 요약 고려.
-        - `get_optimized_context(self, current_task_prompt: str, required_recent_interactions: int = 5) -> str`: 현재 작업 프롬프트와 함께 LLM에 전달할 최적화된 컨텍스트 문자열 반환.
-            - 최근 `required_recent_interactions`는 포함.
-            - 오래된 기록은 `_summary_cache`와 함께 조합하거나, 전체 기록이 `context_token_limit`을 넘지 않도록 조절.
-            - 필요시 `_summarize_interactions()` 호출.
-        - `_summarize_interactions(self, interactions_to_summarize: list[dict]) -> str`: 제공된 상호작용 목록을 `llm_client`를 사용해 요약. 결과를 `_summary_cache`에 업데이트.
-        - `_prune_history(self)`: `max_history_items`를 초과하는 가장 오래된 상호작용(요약된 부분 제외) 제거.
-        - `get_full_history_for_report(self) -> list[dict]`: 최종 보고서 생성을 위해 전체 원본 이력 반환.
+```python
+class RAGManager:
+    """비즈니스 지식 검색 + DB 스키마 검색 통합 관리"""
+    
+    def search_comprehensive_context(self, 
+                                   natural_language_query: str,
+                                   data_context: Dict) -> Dict
+    def get_contextual_recommendations(self, 
+                                     query: str, 
+                                     business_domain: str,
+                                     schema_info: Dict) -> List[Dict]
+```
 
-### 6. `llm_services/llm_client.py`
+### 3. 🤖 AnalysisRecommender (utils/analysis_recommender.py)
+**비즈니스 컨텍스트 인식 AI 추천 엔진**
 
-- **기능**: 특정 LLM Provider(OpenAI, Gemini 등)의 API와 통신. 인증, 요청 생성, 응답 파싱, 기본 오류 처리 및 재시도 로직 포함.
-- **역할**: LLM API 게이트웨이.
-- **주요 함수/클래스**:
-    - `class LLMClient`:
-        - `__init__(self, api_key: str, model_name: str, provider_name: str, default_temperature: float = 0.5, max_retries: int = 3)`: API 키, 모델명, LLM 제공자 이름, 기본 온도값, 최대 재시도 횟수 설정.
-        - `_session`: (선택적) `requests.Session` 또는 해당 SDK 클라이언트 인스턴스.
-        - `generate_text(self, prompt: str, system_prompt: str = None, temperature: float = None, stop_sequences: list[str] = None) -> str`: 텍스트 생성을 위한 LLM API 호출.
-        - `generate_chat_completion(self, messages: list[dict], temperature: float = None, stop_sequences: list[str] = None) -> str`: 채팅 형식 API 호출 (`messages`: `[{'role':'user', 'content':'...'}, ...]`).
-        - `_handle_api_error(self, error_response)`: API 에러 공통 처리.
+```python
+class AnalysisRecommender:
+    """Enhanced RAG 기반 지능형 분석 방법 추천"""
+    
+    def generate_recommendations(self, 
+                               natural_language_request: str,
+                               data_summary: Dict,
+                               business_context: Dict,
+                               schema_context: Dict) -> List[AnalysisRecommendation]
+```
 
-### 7. `llm_services/prompt_crafter.py`
+### 4. 📊 DataLoader (data_processing/data_loader.py)
+**다양한 데이터 형식 지원**
 
-- **기능**: `llm_services/prompts/` 디렉토리의 템플릿 파일을 기반으로, 현재 분석 컨텍스트와 노드 정보를 조합하여 LLM에 전달할 최종 프롬프트를 동적으로 생성.
-- **역할**: 프롬프트 엔지니어링 및 조립 전문가.
-- **주요 함수/클래스**:
-    - `class PromptCrafter`:
-        - `__init__(self, prompt_template_dir: str, workflow_data: dict = None)`: 프롬프트 템플릿 디렉토리 경로, (선택적) 전체 워크플로우 데이터 참조.
-        - `_jinja_env`: (Jinja2 사용 시) `jinja2.Environment` 인스턴스.
-        - `_load_template(self, template_name: str) -> jinja2.Template`: 지정된 이름의 템플릿 파일 로드.
-        - `render_prompt(self, template_name: str, context_data: dict) -> str`: 템플릿과 컨텍스트 데이터를 결합하여 최종 프롬프트 문자열 생성.
-        - `get_prompt_for_node(self, node_id: str, dynamic_data: dict, agent_context_summary: str = None) -> str`:
-            - `node_id`에 매핑되는 템플릿 파일명 결정 (예: `f"stage_{node_id.split('-')[0]}/{node_id.replace('-', '_')}.md"`).
-            - `dynamic_data`: 현재 노드 처리 위한 특정 데이터 (예: 사용자 요청 텍스트, 변수 목록).
-            - `agent_context_summary`: `ContextManager`가 제공하는 요약된 이전 대화/작업 이력.
-            - 이 모든 정보를 `context_data`로 만들어 `render_prompt` 호출.
+- **지원 형식**: CSV, Excel, JSON, Parquet
+- **메타데이터 추출**: 컬럼 타입, 분포, 결측치 정보
+- **스키마 매핑**: 데이터베이스 스키마 정보 연동
+- **비즈니스 컨텍스트 매핑**: 데이터 딕셔너리 연동
 
-### 8. `llm_services/prompts/` (디렉토리)
+---
 
-- **기능**: LLM에 전달될 프롬프트의 템플릿을 저장. Markdown(.md) 또는 Jinja2(.j2) 등의 텍스트 파일 형식 사용.
-- **역할**: 프롬프트 내용과 구조를 코드와 분리하여 관리.
-- **하위 구조 예시**:
-    - `common/`: 여러 프롬프트에서 공통으로 사용될 수 있는 지시사항, 포맷팅 가이드라인 (예: `json_output_format.md`).
-    - `stage_1_user_understanding/`: 워크플로우 1단계 관련 프롬프트 (예: `1_1_analyze_user_request.md`).
-    - 각 파일은 변수 삽입 위치를 명시 (예: Jinja2의 `{{ variable_name }}`).
+## 🔄 Enhanced Workflow
 
-### 9. `data_processing/data_loader.py`
+### 📋 전체 워크플로우
 
-- **기능**: 지정된 경로의 데이터 파일(Tableau .hyper, CSV 등)을 로드하여 Pandas DataFrame으로 변환. 기본적인 데이터 정보(컬럼명, 추정 타입, 결측치 등) 추출 기능 제공.
-- **역할**: 원시 데이터 접근 및 초기 탐색 정보 제공.
-- **주요 함수/클래스**:
-    - `class DataLoader`:
-        - `load_data(self, file_path: str, file_type: str = None) -> pd.DataFrame`: 파일 경로와 타입에 따라 적절한 로더 사용. 파일 타입 미지정 시 확장자로 추론.
-        - `_load_hyper(self, file_path: str) -> pd.DataFrame`: Tableau Hyper 파일 로드 (`pantab` 등 사용).
-        - `_load_csv(self, file_path: str) -> pd.DataFrame`: CSV 파일 로드.
-        - `get_data_profile(self, dataframe: pd.DataFrame, N_unique_threshold: int = 10) -> dict`: DataFrame의 각 컬럼에 대한 프로파일링 (데이터 타입, 결측치 수/비율, 고유값 수, 예시 값, (고유값 수가 적으면) 빈도수 상위 N개 등) 수행. Agent의 2-2, 2-3 단계 등에서 활용.
+```mermaid
+graph TD
+    A[시스템 시작] --> B[데이터 파일 선택]
+    B --> C[데이터 로딩 완료]
+    C --> D[자연어 분석 요청 입력]
+    D --> E[RAG 시스템 활성화]
+    E --> F[비즈니스 지식 검색]
+    E --> G[DB 스키마 구조 검색]
+    F --> H[AI 분석 방법 추천]
+    G --> H
+    H --> I[사용자 방법 선택]
+    I --> J[자동 통계 분석 실행]
+    J --> K[가정 검정 자동 수행]
+    K --> L[결과 보고서 생성]
+    L --> M[추가 분석 또는 종료]
+    M -->|추가 분석| D
+    M -->|종료| N[세션 종료]
+```
 
-### 10. `rag_system/code_retriever.py`
+### 🎯 단계별 상세 설명
 
-- **기능**: 사용자의 분석 목적이나 명시된 통계 검정 방법에 가장 적합한 코드 스니펫을 `resources/code_snippets/` 에서 (또는 구축된 Vector DB에서) 검색.
-- **역할**: RAG의 Retrieval. 코드 지식 베이스 접근.
-- **주요 함수/클래스**:
-    - `class CodeRetriever`:
-        - `__init__(self, index_path_or_snippets_dir: str, embedding_model_name: str = None, top_k_results: int = 3)`: Vector DB 인덱스 경로 또는 코드 스니펫 원본 디렉토리, (필요시) 임베딩 모델, 반환할 결과 수 설정.
-        - `_vector_db_client`: (Vector DB 사용 시) 클라이언트 인스턴스.
-        - `_embedding_model`: (필요시) 텍스트 임베딩 생성 모델.
-        - `find_relevant_code_snippets(self, query_description: str, required_variables: list[str] = None, language: str = "python") -> list[dict]`:
-            - `query_description`: "독립표본 t-검정 수행 방법" 또는 "두 그룹 간 평균 비교 코드".
-            - `required_variables`: (선택적) 코드 스니펫이 다루어야 할 변수명 정보.
-            - 검색된 코드 스니펫의 내용, 출처(파일명), 관련성 점수 등을 담은 딕셔너리 리스트 반환.
+#### 1️⃣ 데이터 선택 (Data Selection)
+```bash
+📁 사용 가능한 데이터 파일:
+├── student_scores.xlsx - 학생 성적 데이터
+├── sales_performance.csv - 영업 실적 데이터  
+├── survey_data.json - 설문조사 데이터
+└── custom_data.csv - 사용자 데이터
 
-### 11. `rag_system/code_indexer.py` (주로 초기 셋업 시 실행)
+선택하신 파일: sales_performance.csv
+✅ 데이터 로딩 완료 (1,200 rows, 8 columns)
+```
 
-- **기능**: `resources/code_snippets/` 디렉토리의 모든 코드 파일을 읽어 텍스트 임베딩을 생성하고, 이를 Vector DB 또는 로컬 파일 기반 인덱스에 저장.
-- **역할**: RAG 검색을 위한 지식 베이스 사전 구축.
-- **주요 함수/클래스**:
-    - `class CodeIndexer`:
-        - `__init__(self, snippets_source_dir: str, target_index_path: str, embedding_model_name: str)`: 스니펫 소스 경로, 생성될 인덱스 저장 경로, 임베딩 모델 설정.
-        - `_scan_snippet_files(self) -> list[str]`: 소스 디렉토리에서 모든 코드 파일 경로 스캔.
-        - `_generate_embedding(self, code_text: str, metadata: dict) -> list[float]`: 코드 텍스트에 대한 임베딩 벡터 생성.
-        - `build_and_save_index(self)`: 모든 스니펫 파일 처리 후 최종 인덱스 저장.
+#### 2️⃣ 자연어 분석 요청 입력
+```
+🗣️ 분석하고 싶은 내용을 자연어로 설명해주세요:
 
-### 12. `code_execution/safe_code_executor.py`
+예시:
+- "지역별 매출 차이가 통계적으로 유의한지 확인하고 싶어요"
+- "고객 만족도와 재구매율 사이의 상관관계를 분석해주세요"  
+- "새로운 마케팅 전략의 효과를 검증하고 싶습니다"
+- "제품군별 수익성 차이를 분석해주세요"
 
-- **기능**: RAG를 통해 검색된 문자열 형태의 Python 통계 코드를 가능한 안전한 방식으로 실행. 입력 데이터와 파라미터를 코드에 주입하고, 실행 결과(텍스트 출력, 변수 값, 이미지 데이터 등)를 캡처하여 반환.
-- **역할**: 외부 코드의 동적 실행. **보안에 매우 민감한 부분.**
-- **주요 함수/클래스**:
-    - `class SafeCodeExecutor`:
-        - `__init__(self, timeout_seconds: int = 30)`: 코드 실행 시간 제한 설정.
-        - `execute_code(self, code_string: str, input_dataframe: pd.DataFrame, parameters: dict = None) -> dict`:
-            - `code_string`: 실행할 Python 코드.
-            - `input_dataframe`: 코드 내에서 `df` 등의 이름으로 참조될 Pandas DataFrame.
-            - `parameters`: 코드 내 변수로 주입될 추가 파라미터.
-            - **실행 방식 고려 사항**:
-                1. **`restrictedpython`**: Python의 안전한 서브셋만 실행.
-                2. **`subprocess` + `exec`**: 별도 프로세스에서 제한된 `globals`, `locals`와 함께 `exec` 실행. `stdout`, `stderr` 캡처. 자원 제한.
-                3. **Docker 컨테이너**: 각 실행을 완전히 격리된 Docker 컨테이너 내부에서 수행 (가장 안전하나 무거움).
-                4. **Pynbox, nsjail 등 샌드박싱 라이브러리**: 보다 정교한 샌드박싱 제공.
-            - 반환 값: `{'stdout': str, 'stderr': str, 'result_variables': dict, 'generated_plots': list[bytes]}` 형태의 딕셔너리. `result_variables`는 코드 실행 후 특정 변수 값 추출.
+입력: "지역별 매출 차이가 통계적으로 유의한지 확인하고 싶어요"
+```
 
-### 13. `reporting/report_generator.py`
+#### 3️⃣ Enhanced RAG 시스템 동작
+```python
+# 비즈니스 지식 검색
+business_context = {
+    "domain": "영업/매출 분석",
+    "terminology": {
+        "지역별": "지리적 세그먼테이션 분석",
+        "매출 차이": "수익 변동성 분석"
+    },
+    "guidelines": "지역별 매출 분석 시 계절성, 인구 밀도, 경제 수준 고려 필요"
+}
 
-- **기능**: `LLMAgent`의 전체 분석 과정(선택된 노드, 주요 결정, LLM 상호작용 요약, 실행된 코드, 통계 결과)과 `ContextManager`의 이력을 종합하여 사용자 친화적인 최종 보고서(Markdown, HTML 등) 생성.
-- **역할**: 분석 결과 및 과정의 최종 사용자 전달.
-- **주요 함수/클래스**:
-    - `class ReportGenerator`:
-        - `__init__(self, output_directory: str, report_format: str = "md")`: 결과 보고서 저장 디렉토리, 기본 포맷 설정.
-        - `generate_report(self, agent_final_state: dict, full_interaction_history: list[dict], data_profile: dict, workflow_graph_info: dict) -> str`:
-            - `agent_final_state`: Agent의 `analysis_parameters`, 최종 데이터 요약 등.
-            - `full_interaction_history`: `ContextManager`가 제공하는 전체 이력.
-            - 보고서 내용을 구성하고 파일로 저장 후, 파일 경로 반환.
-        - `_format_interaction(self, interaction_log: dict) -> str`: 단일 상호작용 로그를 보고서 형식에 맞게 변환.
-        - `_format_code_execution(self, code_details: dict) -> str`: 코드 실행 결과(stdout, plot 등)를 보고서 형식으로 변환.
+# DB 스키마 구조 검색
+schema_context = {
+    "primary_table": "sales_data",
+    "key_columns": {
+        "region": "VARCHAR(50) - 지역 코드 (서울:01, 부산:02, 대구:03)",
+        "sales_amount": "DECIMAL(15,2) - 매출액 (원 단위)",
+        "sales_date": "DATE - 매출 발생일"
+    },
+    "relationships": [
+        "sales_data.region_id → region_master.region_id",
+        "sales_data.product_id → product_master.product_id"
+    ],
+    "constraints": {
+        "sales_amount": "NOT NULL, CHECK(sales_amount >= 0)",
+        "region": "NOT NULL, FOREIGN KEY"
+    }
+}
+```
 
-### 14. `config/settings.py`
+#### 4️⃣ AI 분석 방법 추천
+```
+🤖 비즈니스 컨텍스트와 데이터베이스 스키마를 분석한 결과, 다음 방법들을 추천합니다:
 
-- **기능**: 애플리케이션 전반의 설정값을 관리. 환경 변수에서 로드하거나 기본값을 가질 수 있음.
-- **역할**: 설정 중앙화.
-- **변수 예시**:
-    - `LLM_PROVIDER = "openai"` (또는 "gemini")
-    - `OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")`
-    - `GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")`
-    - `LLM_MODEL_NAME = "gpt-4o"`
-    - `WORKFLOW_FILE_PATH = "resources/workflow_graph.json"`
-    - `CODE_SNIPPETS_DIR = "resources/code_snippets/"`
-    - `RAG_INDEX_PATH = "resources/rag_index/code_snippets.index"` (FAISS 등)
-    - `EMBEDDING_MODEL_NAME = "text-embedding-ada-002"` (OpenAI) 또는 다른 Sentence Transformer 모델
-    - `INPUT_DATA_DEFAULT_DIR = "input_data/"`
-    - `OUTPUT_RESULTS_DIR = "output_results/"`
-    - `LOG_LEVEL = "INFO"`
+📊 추천 분석 방법:
 
-### 13. `.env`
+1. 🥇 일원분산분석 (ANOVA) - 추천도: 95%
+   ├── 적용 이유: region 컬럼의 3개 카테고리(서울/부산/대구) 간 sales_amount 평균 비교 최적
+   ├── 전제조건: 정규성, 등분산성 자동 검정 수행
+   ├── 스키마 고려사항: region 컬럼의 FK 제약조건으로 데이터 무결성 보장
+   ├── 비즈니스 해석: 지역별 매출 격차의 통계적 유의성 확인
+   └── 사후검정: Tukey HSD로 구체적 차이 그룹 식별
 
-- **기능**: 실제 API 키 및 기타 민감한 설정값을 저장합니다. **이 파일은 절대 Git에 커밋하면 안 됩니다.**
-- **내용 예시**:
+2. 🥈 Kruskal-Wallis 검정 - 추천도: 85%  
+   ├── 적용 이유: sales_amount의 CHECK 제약조건(≥0)으로 인한 분포 왜곡 가능성 대비
+   ├── 장점: 분포 가정 불필요
+   └── 비즈니스 해석: 비모수적 지역별 매출 순위 차이
+
+3. 🥉 독립표본 t-검정 - 추천도: 60%
+   ├── 적용 조건: region_master 테이블과 조인하여 지역을 2그룹으로 병합 시
+   └── 제한사항: 다중 지역 정보 손실
+
+선택하실 방법 번호를 입력해주세요 (1-3): 1
+```
+
+#### 5️⃣ 자동 통계 분석 실행
+```
+🔄 선택된 분석 방법: 일원분산분석 (ANOVA)
+
+📋 자동 분석 진행 상황:
+✅ 1. 데이터 전처리 완료
+✅ 2. 정규성 검정 수행 (Shapiro-Wilk test)
+   ├── 서울지역: p-value = 0.234 (정규성 만족)
+   ├── 부산지역: p-value = 0.445 (정규성 만족)  
+   └── 대구지역: p-value = 0.123 (정규성 만족)
+✅ 3. 등분산성 검정 수행 (Levene's test)
+   └── p-value = 0.678 (등분산성 만족)
+✅ 4. ANOVA 분석 실행
+✅ 5. 사후검정 (Tukey HSD) 수행
+✅ 6. 결과 해석 및 보고서 생성
+
+📊 분석 완료! 결과 보고서가 생성되었습니다.
+```
+
+#### 6️⃣ 결과 보고서
+```
+📈 통계 분석 결과 보고서
+================================
+
+🎯 분석 목적: 지역별 매출 차이의 통계적 유의성 검증
+
+📊 데이터 개요:
+- 전체 샘플: 1,200개
+- 분석 테이블: sales_data
+- 지역별 분포: 서울(400), 부산(350), 대구(450)
+- 분석 변수: sales_amount (월 평균 매출액)
+
+🗄️ 데이터베이스 스키마 정보:
+- Primary Key: sales_id (AUTO_INCREMENT)
+- 분석 컬럼: region (VARCHAR, FK), sales_amount (DECIMAL)
+- 관련 테이블: region_master (지역 마스터), product_master (제품 마스터)
+- 데이터 무결성: FK 제약조건으로 지역 코드 검증됨
+
+🔍 주요 결과:
+┌─────────────────────────────────┐
+│ ANOVA 분석 결과                 │
+├─────────────────────────────────┤
+│ F-statistic: 23.456             │
+│ p-value: < 0.001 ***            │
+│ 효과크기(η²): 0.034             │
+└─────────────────────────────────┘
+
+🎯 해석:
+✅ 지역별 매출 차이는 통계적으로 유의합니다 (p < 0.001)
+✅ 효과 크기는 중간 수준으로 실무적 의미가 있습니다
+
+📋 사후검정 결과 (Tukey HSD):
+├── 서울 vs 부산: 평균차이 = 124만원 (p < 0.001) ***
+├── 서울 vs 대구: 평균차이 = 89만원 (p = 0.023) *  
+└── 부산 vs 대구: 평균차이 = 35만원 (p = 0.234) n.s
+
+💡 비즈니스 인사이트:
+1. 서울 지역의 매출이 다른 지역 대비 유의하게 높음
+2. 부산과 대구 간 매출 차이는 통계적으로 유의하지 않음
+3. 지역별 마케팅 전략 차별화 필요
+4. 데이터베이스 구조상 region_master와의 관계를 활용한 추가 분석 가능
+
+📎 생성된 파일:
+├── 📊 anova_results_20241201_143022.html
+├── 📈 regional_sales_plot.png  
+└── 📋 detailed_statistics.csv
+```
+
+---
+
+## 🚀 빠른 시작
+
+### 📋 사전 요구사항
+- Python 3.11+
+- Poetry (의존성 관리)
+- OpenAI API 키
+- CUDA GPU (선택사항, 임베딩 모델 가속화)
+
+### ⚡ 설치 및 실행
+
+#### 1️⃣ 저장소 클론 및 환경 설정
+```bash
+# 저장소 클론
+git clone <repository-url>
+cd text_to_statistical_test
+
+# Poetry로 가상환경 및 의존성 설치
+poetry install
+
+# 환경 활성화
+poetry shell
+
+# 프로젝트 초기 설정 (환경변수, 디렉토리 생성)
+poetry run python setup_project.py
+```
+
+#### 2️⃣ 환경 변수 설정
+```bash
+# .env 파일 생성 (setup_project.py가 자동 생성)
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# RAG 시스템 설정
+RAG_EMBEDDING_MODEL=maidalun1020/bce-embedding-base_v1
+RAG_TOP_K=5
+RAG_SIMILARITY_THRESHOLD=0.7
+```
+
+#### 3️⃣ 시스템 실행
+```bash
+# 메인 분석 시스템 실행
+poetry run python main.py
+
+# 도움말 보기
+poetry run python main.py --help
+
+# 예시: 특정 데이터로 시작
+poetry run python main.py --data input_data/sales_performance.csv
+```
+
+### 🎯 사용 예시
+
+#### 📊 자연어 분석 요청 예시
+
+| 분석 유형 | 자연어 요청 예시 | 추천될 통계 방법 |
+|----------|----------------|----------------|
+| **그룹 비교** | "남녀 간 성적 차이가 있는지 확인하고 싶어요" | 독립표본 t-검정 |
+| **다중 그룹** | "학년별 만족도 차이를 분석해주세요" | 일원분산분석 (ANOVA) |
+| **상관관계** | "공부시간과 성적의 관계를 알고 싶습니다" | 피어슨 상관분석 |
+| **범주형 관계** | "성별과 전공 선택 간 관련성을 확인해주세요" | 카이제곱 독립성 검정 |
+| **예측 모델** | "여러 요인들이 매출에 미치는 영향을 분석해주세요" | 다중회귀분석 |
+
+---
+
+## 🏢 비즈니스 컨텍스트 설정
+
+### 📚 업계 지식베이스 구성
+
+#### 🗂️ input_data/metadata/ 구조
+```
+metadata/
+├── business_dictionary.json         # 업계 용어사전
+├── domain_knowledge.md             # 도메인 전문 지식  
+├── analysis_guidelines.md          # 분석 가이드라인
+└── database_schemas/               # DB 스키마 구조 정보 [NEW]
+    ├── schema_definitions.json     # 테이블 구조 정의
+    ├── relationship_maps.json      # 테이블 관계 매핑
+    └── column_descriptions.json    # 컬럼 상세 설명
+```
+
+#### 🗄️ database_schemas/ 예시
+
+##### schema_definitions.json
+```json
+{
+  "sales_data": {
+    "table_description": "영업 실적 데이터 메인 테이블",
+    "columns": {
+      "sales_id": {
+        "type": "INT",
+        "constraints": "PRIMARY KEY AUTO_INCREMENT",
+        "description": "매출 기록 고유 식별자"
+      },
+      "region": {
+        "type": "VARCHAR(50)",
+        "constraints": "NOT NULL, FOREIGN KEY",
+        "description": "지역 코드 (서울:01, 부산:02, 대구:03)",
+        "business_meaning": "지리적 세그먼테이션 기준"
+      },
+      "sales_amount": {
+        "type": "DECIMAL(15,2)",
+        "constraints": "NOT NULL, CHECK(sales_amount >= 0)",
+        "description": "매출액 (원 단위)",
+        "statistical_notes": "정규성 검정 필요, 로그 변환 고려"
+      }
+    },
+    "indexes": ["region", "sales_date"],
+    "business_rules": [
+      "매출액은 0 이상이어야 함",
+      "지역 코드는 region_master 테이블과 연동"
+    ]
+  }
+}
+```
+
+##### relationship_maps.json
+```json
+{
+  "relationships": [
+    {
+      "parent_table": "region_master",
+      "child_table": "sales_data",
+      "relationship_type": "one_to_many",
+      "join_condition": "region_master.region_id = sales_data.region",
+      "business_context": "한 지역에 여러 매출 기록 존재"
+    },
+    {
+      "parent_table": "product_master",
+      "child_table": "sales_data", 
+      "relationship_type": "one_to_many",
+      "join_condition": "product_master.product_id = sales_data.product_id",
+      "business_context": "한 제품에 여러 매출 기록 존재"
+    }
+  ],
+  "analytical_patterns": {
+    "regional_analysis": {
+      "primary_table": "sales_data",
+      "dimension_table": "region_master",
+      "typical_groupby": "region",
+      "common_metrics": ["sales_amount", "transaction_count"]
+    }
+  }
+}
+```
+
+##### column_descriptions.json
+```json
+{
+  "sales_data": {
+    "region": {
+      "business_definition": "매출이 발생한 지역의 행정구역 코드",
+      "values": {
+        "01": "서울특별시",
+        "02": "부산광역시", 
+        "03": "대구광역시"
+      },
+      "statistical_considerations": [
+        "범주형 변수로 처리",
+        "ANOVA 또는 카이제곱 검정 적용 가능"
+      ],
+      "business_rules": [
+        "지역별 경제 규모 차이 고려",
+        "인구 밀도 보정 필요시 population_density 테이블 참조"
+      ]
+    },
+    "sales_amount": {
+      "business_definition": "해당 거래에서 발생한 총 매출액",
+      "unit": "원(KRW)",
+      "typical_range": "10,000 ~ 50,000,000",
+      "statistical_considerations": [
+        "우측 편향 분포 가능성",
+        "이상치 존재 가능성 높음",
+        "로그 변환 후 정규성 확인 권장"
+      ],
+      "business_rules": [
+        "부가세 포함 금액",
+        "할인 적용 후 최종 금액"
+      ]
+    }
+  }
+}
+```
+
+---
+
+## 🔧 고급 설정
+
+### 🤖 RAG 시스템 커스터마이징
+
+#### 📊 임베딩 모델 변경
+```python
+# config/settings.py에서 설정
+RAG_CONFIG = {
+    "embedding_model": "maidalun1020/bce-embedding-base_v1",  # 기본값
+    # 대안 모델들:
+    # "jhgan/ko-sroberta-multitask",  # 한국어 특화
+    # "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",  # 다국어
+    "similarity_threshold": 0.7,
+    "top_k_results": 5,
+    "rerank_enabled": True
+}
+```
+
+#### 🏗️ 커스텀 비즈니스 지식 추가
+```python
+# rag_system/business_retriever.py 확장
+class CustomBusinessRetriever(BusinessRetriever):
+    def add_domain_knowledge(self, domain: str, knowledge: Dict):
+        """특정 도메인 지식 추가"""
+        
+    def update_terminology(self, term: str, definition: Dict):
+        """용어사전 업데이트"""
+
+# rag_system/schema_retriever.py 확장        
+class CustomSchemaRetriever(SchemaRetriever):
+    def add_schema_definition(self, table: str, schema: Dict):
+        """새로운 테이블 스키마 정의 추가"""
+        
+    def update_relationship_map(self, relationship: Dict):
+        """테이블 관계 정보 업데이트"""
+```
+
+### 🐳 Docker 배포
+
+#### 🏃‍♂️ Docker Compose 실행
+```bash
+# 전체 스택 실행
+docker-compose up -d
+
+# 로그 확인
+docker-compose logs -f
+
+# 종료
+docker-compose down
+```
+
+#### ⚙️ docker-compose.yml 주요 설정
+```yaml
+version: '3.8'
+services:
+  statistical-analysis:
+    build: .
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - RAG_EMBEDDING_MODEL=maidalun1020/bce-embedding-base_v1
+    volumes:
+      - ./input_data:/app/input_data
+      - ./output_results:/app/output_results
+    ports:
+      - "8000:8000"
+```
+
+---
+
+## 📊 성능 최적화
+
+### 🚀 RAG 시스템 최적화
+
+#### 💾 벡터 인덱스 캐싱
+```python
+# rag_system/business_retriever.py & schema_retriever.py
+class BusinessRetriever:
+    def __init__(self, cache_enabled=True):
+        self.cache_dir = "resources/rag_index/"
+        self.embedding_model = "maidalun1020/bce-embedding-base_v1"
+        
+    def build_index(self, force_rebuild=False):
+        """인덱스 구축 및 캐싱"""
+
+class SchemaRetriever:
+    def __init__(self, cache_enabled=True):
+        self.schema_cache_dir = "resources/rag_index/schemas/"
+        self.embedding_model = "maidalun1020/bce-embedding-base_v1"
+        
+    def build_schema_index(self, force_rebuild=False):
+        """스키마 인덱스 구축 및 캐싱"""
+```
+
+#### ⚡ 검색 성능 향상
+- **FAISS 인덱스 최적화**: IVF (Inverted File) 사용
+- **임베딩 배치 처리**: 대량 텍스트 동시 처리
+- **결과 캐싱**: 자주 사용되는 쿼리 결과 저장
+- **스키마 정보 캐싱**: 데이터베이스 구조 정보 메모리 캐싱
+
+---
+
+## 🧪 테스트 및 평가
+
+### 📈 RAG 시스템 평가
+```bash
+# RAG 검색 품질 테스트
+poetry run python tests/test_rag_quality.py
+
+# 비즈니스 컨텍스트 인식 테스트  
+poetry run python tests/test_business_context.py
+
+# DB 스키마 검색 테스트
+poetry run python tests/test_schema_retrieval.py
+
+# 전체 통합 테스트
+poetry run python tests/test_integration.py
+```
+
+### 📊 성능 벤치마크
+- **검색 정확도**: 관련 문서 상위 5개 내 포함률
+- **응답 속도**: 평균 쿼리 처리 시간 < 2초
+- **비즈니스 컨텍스트 인식률**: 도메인 특화 용어 이해도
+- **스키마 매칭 정확도**: 데이터 컬럼과 스키마 정보 매칭률
+
+---
+
+## 🛠️ 개발 가이드
+
+### 🔌 새로운 통계 방법 추가
+
+#### 1️⃣ 비즈니스 가이드라인 업데이트
+```markdown
+# input_data/metadata/analysis_guidelines.md에 추가
+## Mann-Whitney U 검정
+- 비모수적 두 그룹 비교 방법
+- 정규성 가정 불필요
+- 순위 기반 분석
+- DB 스키마 고려사항: 순서형 변수 또는 연속형 변수에 적용
+```
+
+#### 2️⃣ 스키마 패턴 추가
+```json
+// relationship_maps.json에 추가
+{
+  "analytical_patterns": {
+    "two_group_comparison": {
+      "applicable_methods": ["mann_whitney", "t_test"],
+      "schema_requirements": {
+        "grouping_column": "categorical, 2 unique values",
+        "target_column": "numeric or ordinal"
+      }
+    }
+  }
+}
+```
+
+#### 3️⃣ RAG 인덱스 재구축
+```bash
+poetry run python -c "
+from rag_system.business_retriever import BusinessRetriever
+from rag_system.schema_retriever import SchemaRetriever
+business_retriever = BusinessRetriever()
+schema_retriever = SchemaRetriever()
+business_retriever.build_index(force_rebuild=True)
+schema_retriever.build_schema_index(force_rebuild=True)
+"
+```
+
+### 🏢 새로운 비즈니스 도메인 추가
+
+#### 📚 도메인 지식 확장
+```json
+// business_dictionary.json에 추가
+{
+  "healthcare": {
+    "p_value": {
+      "definition": "통계적 유의성 지표",
+      "healthcare_context": "임상시험에서 0.05 기준 엄격 적용",
+      "regulatory_notes": "FDA 가이드라인 준수 필요"
+    }
+  }
+}
+```
+
+#### 🗄️ 도메인별 스키마 패턴 추가
+```json
+// schema_definitions.json에 추가
+{
+  "patient_data": {
+    "table_description": "환자 임상 데이터",
+    "domain": "healthcare",
+    "statistical_considerations": [
+      "개인정보 보호 필수",
+      "IRB 승인 확인 필요",
+      "표본 크기 계산 시 효과 크기 고려"
+    ]
+  }
+}
+```
+
+---
+
+## 🤝 기여 가이드
+
+### 📝 기여 방법
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+### 🐛 버그 리포트
+- GitHub Issues 사용
+- 재현 가능한 예시 코드 포함
+- 환경 정보 (OS, Python 버전) 명시
+
+---
+
+## 📄 라이선스
+
+이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 참조하세요.
+
+---
+
+## 🙏 감사의 말
+
+- **BCEmbedding**: 우수한 이중언어 임베딩 모델 제공
+- **OpenAI**: GPT 모델 API 서비스
+- **Sentence Transformers**: 강력한 임베딩 라이브러리
+- **FAISS**: 효율적인 벡터 검색 엔진
+
+---
+
+## 📞 지원 및 문의
+
+- **문서**: 프로젝트 내 `docs/` 폴더 참조
+- **이슈 트래킹**: GitHub Issues
+- **토론**: GitHub Discussions
+
+**Happy Statistical Analysis! 📊✨**

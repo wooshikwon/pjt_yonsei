@@ -6,10 +6,12 @@ LLM에 전달할 최종 프롬프트를 동적으로 생성합니다.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 from pathlib import Path
 import re
 from jinja2 import Environment, FileSystemLoader, Template, TemplateNotFound
+import json
+from datetime import datetime
 
 
 class PromptCrafter:
@@ -32,6 +34,9 @@ class PromptCrafter:
         self.workflow_data = workflow_data or {}
         self.logger = logging.getLogger(__name__)
         
+        # JSON 프롬프트 파일 캐시
+        self._json_prompts_cache = {}
+        
         # Jinja2 환경 설정
         if self.template_dir.exists():
             self._jinja_env = Environment(
@@ -45,6 +50,33 @@ class PromptCrafter:
         
         # 기본 템플릿 캐시
         self._template_cache: Dict[str, Template] = {}
+        
+        # JSON 프롬프트 파일 로드
+        self._load_json_prompts()
+    
+    def _load_json_prompts(self):
+        """JSON 프롬프트 파일들을 로드하고 캐시합니다."""
+        try:
+            json_files = list(self.template_dir.glob("*.json"))
+            
+            for json_file in json_files:
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        prompts_data = json.load(f)
+                    
+                    # 파일명을 키로 사용 (확장자 제거)
+                    file_key = json_file.stem
+                    self._json_prompts_cache[file_key] = prompts_data
+                    
+                    self.logger.info(f"JSON 프롬프트 파일 로드: {json_file.name}")
+                    
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"JSON 파일 파싱 오류 ({json_file.name}): {e}")
+                except Exception as e:
+                    self.logger.error(f"JSON 파일 로드 오류 ({json_file.name}): {e}")
+                    
+        except Exception as e:
+            self.logger.error(f"JSON 프롬프트 파일 로드 실패: {e}")
     
     def get_prompt_for_node(self, node_id: str, dynamic_data: Dict = None, 
                            agent_context_summary: str = None) -> str:
@@ -59,20 +91,119 @@ class PromptCrafter:
         Returns:
             str: 생성된 프롬프트
         """
-        # 템플릿 파일명 결정
-        template_name = self._get_template_name_for_node(node_id)
-        
-        # 컨텍스트 데이터 구성
-        context_data = self._build_context_data(
-            node_id, dynamic_data, agent_context_summary
-        )
-        
-        # 프롬프트 렌더링
         try:
+            # 1. JSON 프롬프트에서 먼저 찾기
+            prompt = self._get_prompt_from_json(node_id, dynamic_data, agent_context_summary)
+            if prompt:
+                return prompt
+            
+            # 2. Markdown 템플릿에서 찾기
+            template_name = self._get_template_name_for_node(node_id)
+            
+            # 컨텍스트 데이터 구성
+            context_data = self._build_context_data(
+                node_id, dynamic_data, agent_context_summary
+            )
+            
             return self.render_prompt(template_name, context_data)
-        except TemplateNotFound:
-            # 템플릿이 없으면 기본 프롬프트 생성
-            return self._generate_default_prompt(node_id, context_data)
+        except Exception as e:
+            self.logger.error(f"프롬프트 생성 실패 (노드: {node_id}): {e}")
+            # 폴백: 기본 프롬프트
+            return self._generate_default_prompt(node_id, dynamic_data or {})
+    
+    def _get_prompt_from_json(self, node_id: str, dynamic_data: Dict = None, 
+                            agent_context_summary: str = None) -> Optional[str]:
+        """
+        JSON 프롬프트 파일에서 노드에 해당하는 프롬프트를 찾습니다.
+        
+        Args:
+            node_id: 워크플로우 노드 ID
+            dynamic_data: 동적 데이터
+            agent_context_summary: 에이전트 컨텍스트 요약
+            
+        Returns:
+            Optional[str]: 찾은 프롬프트 또는 None
+        """
+        try:
+            # workflow_graph.json 노드 ID와 JSON 프롬프트 파일 매핑
+            node_to_json_mapping = {
+                'natural_language_request': ('natural_language_analysis', 'natural_language_request_analysis'),
+                'request_clarification': ('natural_language_analysis', 'request_clarification'),
+                'ai_recommendation_generation': ('natural_language_analysis', 'method_recommendation'),
+                'automated_assumption_testing': ('natural_language_analysis', 'assumption_checking'),
+                'results_interpretation': ('natural_language_analysis', 'result_interpretation'),
+                
+                'automated_preprocessing': ('code_generation', 'automated_preprocessing'),
+                'statistical_analysis_execution': ('code_generation', 'statistical_analysis_execution'),
+                
+                'report_generation': ('result_interpretation', 'report_generation'),
+                'business_communication': ('result_interpretation', 'business_communication'),
+                
+                'workflow_management': ('workflow_coordination', 'workflow_management'),
+                'decision_engine': ('workflow_coordination', 'decision_engine'),
+                'context_management': ('workflow_coordination', 'context_management'),
+                'error_recovery': ('workflow_coordination', 'error_recovery'),
+                'quality_assurance': ('workflow_coordination', 'quality_assurance')
+            }
+            
+            # 노드 ID에 해당하는 JSON 프롬프트 찾기
+            if node_id in node_to_json_mapping:
+                json_file_key, prompt_key = node_to_json_mapping[node_id]
+                
+                if json_file_key in self._json_prompts_cache:
+                    json_prompts = self._json_prompts_cache[json_file_key]
+                    
+                    if prompt_key in json_prompts:
+                        prompt_config = json_prompts[prompt_key]
+                        
+                        # JSON 프롬프트 템플릿 렌더링
+                        return self._render_json_prompt(prompt_config, dynamic_data, agent_context_summary)
+                        
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"JSON 프롬프트 검색 오류 (노드: {node_id}): {e}")
+            return None
+    
+    def _render_json_prompt(self, prompt_config: Dict, dynamic_data: Dict = None, 
+                          agent_context_summary: str = None) -> str:
+        """
+        JSON 프롬프트 설정을 기반으로 프롬프트를 렌더링합니다.
+        
+        Args:
+            prompt_config: JSON 프롬프트 설정
+            dynamic_data: 동적 데이터
+            agent_context_summary: 에이전트 컨텍스트 요약
+            
+        Returns:
+            str: 렌더링된 프롬프트
+        """
+        try:
+            system_prompt = prompt_config.get('system_prompt', '')
+            user_prompt_template = prompt_config.get('user_prompt_template', '')
+            
+            # 동적 데이터를 사용하여 user_prompt_template 렌더링
+            context_data = dynamic_data or {}
+            context_data['agent_context_summary'] = agent_context_summary or ""
+            context_data['timestamp'] = self._get_current_timestamp()
+            
+            # Jinja2 템플릿으로 렌더링
+            try:
+                template = Environment().from_string(user_prompt_template)
+                user_prompt = template.render(**context_data)
+            except Exception as e:
+                self.logger.warning(f"JSON 프롬프트 템플릿 렌더링 오류: {e}")
+                # 폴백: 기본 문자열 formatting
+                user_prompt = user_prompt_template.format(**context_data)
+            
+            # 시스템 프롬프트와 사용자 프롬프트 결합
+            full_prompt = f"{system_prompt}\n\n{user_prompt}".strip()
+            
+            return full_prompt
+            
+        except Exception as e:
+            self.logger.error(f"JSON 프롬프트 렌더링 오류: {e}")
+            return str(prompt_config)  # 폴백
     
     def render_prompt(self, template_name: str, context_data: Dict) -> str:
         """
@@ -260,7 +391,6 @@ class PromptCrafter:
     
     def _get_current_timestamp(self) -> str:
         """현재 시간을 문자열로 반환합니다."""
-        from datetime import datetime
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     def add_custom_template(self, template_name: str, template_content: str):

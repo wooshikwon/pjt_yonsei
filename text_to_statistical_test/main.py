@@ -1,289 +1,249 @@
 #!/usr/bin/env python3
 """
-🔬 Statistical Analysis Assistant
-비즈니스 컨텍스트 인식 AI 통계 분석 시스템
+Text-to-Statistical-Test Main Entry Point
 
-LLM Agent + Enhanced RAG 시스템 기반으로 사용자의 자연어 분석 요청을 받아 
-비즈니스 도메인 지식과 DB 스키마 구조를 활용하여 최적의 통계 분석 방법을 추천하고 
-자동화된 전제조건 검증과 함께 통계 분석을 수행합니다.
+RAG 기반 Agentic AI 통계 분석 시스템의 메인 진입점
+CLI 인터페이스를 통해 8단계 워크플로우를 실행합니다.
 """
 
-import argparse
 import sys
-import logging
+import asyncio
+import argparse
 from pathlib import Path
+from typing import Dict, Any, Optional
 
-# 현재 디렉토리를 Python 경로에 추가
+# 프로젝트 루트를 Python 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utils import (
-    setup_dependencies, validate_settings, 
-    run_interactive_mode, print_welcome_message
-)
+from config.settings import get_settings, ensure_directories
+from config.logging_config import init_default_logging, get_logger
+from core.workflow.orchestrator import Orchestrator
+from core.workflow.state_manager import StateManager
 
-
-def create_argument_parser():
-    """명령행 인수 파서 생성 - 비즈니스 컨텍스트 인식 자연어 요청 기반 분석"""
+def parse_arguments() -> argparse.Namespace:
+    """명령행 인자 파싱"""
     parser = argparse.ArgumentParser(
-        description='🔬 Statistical Analysis Assistant - 비즈니스 컨텍스트 인식 AI 통계 분석 시스템',
+        description="Text-to-Statistical-Test: RAG 기반 Agentic AI 통계 분석 시스템",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-🏢 Enhanced RAG 기반 워크플로우:
-  1. 📁 input_data/data_files 폴더의 데이터 파일 목록 표시 → 사용자 선택
-  2. 📊 데이터 로딩 완료 및 기본 정보 확인
-  3. 🗣️ 사용자가 자연어로 분석 요청 입력
-  4. 🔍 RAG 시스템 활성화:
-     • 비즈니스 도메인 지식 검색 (business_dictionary, domain_knowledge)
-     • DB 스키마 구조 검색 (schema_definitions, relationship_maps)
-  5. 🧠 AI가 비즈니스 컨텍스트를 고려하여 최적 통계 기법 1~3개 추천
-  6. 👤 사용자가 추천 방법 중 선택
-  7. 🤖 자동화된 전제조건 검증 및 통계 분석 수행 (정규성, 등분산성 등)
-  8. 📄 비즈니스 인사이트 포함 결과 보고서 생성
-
 사용 예시:
-  poetry run python main.py                    # 기본 대화형 모드
-  poetry run python main.py --data sales.csv   # 특정 데이터로 시작
-  poetry run python main.py --verbose          # 상세 로깅 포함  
-  poetry run python main.py --no-welcome       # 환영 메시지 생략
-
-Docker 실행:
-  docker build -t statistical-assistant .
-  docker run -it statistical-assistant
-
-🗣️ 자연어 분석 요청 예시 (비즈니스 도메인별):
-
-┌─────────────────────────────────────────────────────────────────┐
-│ 📊 그룹 비교 분석                                               │
-├─────────────────────────────────────────────────────────────────┤
-│ • "지역별 매출 차이가 통계적으로 유의한지 확인하고 싶어요"       │
-│ • "부서별 직원 만족도에 차이가 있나요?"                         │
-│ • "브랜드별 고객 충성도 점수를 비교해주세요"                    │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│ 🔗 관계 및 상관관계 분석                                        │
-├─────────────────────────────────────────────────────────────────┤
-│ • "광고비와 매출 간의 상관관계를 분석해주세요"                  │
-│ • "고객 만족도와 재구매율 사이의 관계를 알고 싶습니다"          │
-│ • "근무시간과 생산성 지표 간 관련성을 확인해주세요"             │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│ 📈 예측 및 회귀 분석                                            │
-├─────────────────────────────────────────────────────────────────┤
-│ • "여러 마케팅 요인들이 매출에 미치는 영향을 분석해주세요"      │
-│ • "고객 특성을 바탕으로 구매 확률을 예측하고 싶어요"            │
-│ • "제품 특징들이 가격에 미치는 영향도를 알아보세요"             │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│ 🏢 비즈니스 의사결정 분석                                       │
-├─────────────────────────────────────────────────────────────────┤
-│ • "새로운 마케팅 전략의 효과를 검증하고 싶습니다"               │
-│ • "A/B 테스트 결과가 통계적으로 유의한지 확인해주세요"          │
-│ • "고객 세그먼트별 구매 패턴 차이를 분석해주세요"               │
-└─────────────────────────────────────────────────────────────────┘
-
-🏗️ 비즈니스 컨텍스트 메타데이터 활용:
-  • input_data/metadata/business_dictionary.json - 업계 용어사전
-  • input_data/metadata/domain_knowledge.md - 도메인 전문 지식
-  • input_data/metadata/database_schemas/ - DB 스키마 구조 정보
+  python main.py                           # 대화형 모드로 전체 워크플로우 실행
+  python main.py --file data.csv          # 특정 파일로 시작
+  python main.py --stage 3                # 3단계부터 시작
+  python main.py --debug                  # 디버그 모드
+  python main.py --non-interactive        # 비대화형 모드
         """
     )
     
-    # 데이터 파일 옵션
+    # 기본 옵션
     parser.add_argument(
-        '--data', '--input-data',
+        '--file', '-f',
         type=str,
-        help='분석할 데이터 파일 경로 (input_data/data_files 폴더 내)'
-    )
-    
-    # 시스템 옵션
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='상세한 로깅 출력 (디버깅용)'
+        help='분석할 데이터 파일 경로'
     )
     
     parser.add_argument(
-        '--no-welcome',
-        action='store_true',
-        help='환영 메시지 및 워크플로우 가이드 생략'
+        '--stage', '-s',
+        type=int,
+        choices=range(1, 9),
+        default=1,
+        help='시작할 워크플로우 단계 (1-8)'
     )
     
-    return parser
-
-
-def print_startup_info():
-    """시작 시 시스템 정보 출력 - Enhanced RAG 시스템 강조"""
-    print("\n🔬========================================================🔬")
-    print("   📊 Statistical Analysis Assistant 📊")
-    print("    비즈니스 컨텍스트 인식 AI 통계 분석 시스템")
-    print("🔬========================================================🔬")
-    print()
-    print("🧠 Enhanced RAG 시스템 특징:")
-    print("  🏢 비즈니스 도메인 지식 검색")
-    print("  🗄️ DB 스키마 구조 정보 활용")
-    print("  🌏 BCEmbedding 기반 한중 이중언어 지원")
-    print()
-    print("📋 워크플로우:")
-    print("  1. 📁 데이터 파일 선택 (input_data/data_files)")
-    print("  2. 🗣️ 자연어 분석 요청 입력")
-    print("  3. 🔍 RAG 시스템 활성화 (비즈니스 지식 + DB 스키마)")
-    print("  4. 🧠 AI 컨텍스트 인식 분석 방법 추천 (1~3개)")
-    print("  5. 🤖 자동화된 통계 분석 수행 (가정 검정 포함)")
-    print("  6. 📄 비즈니스 인사이트 포함 결과 보고서 생성")
-    print()
-
-
-def validate_business_context_setup():
-    """비즈니스 컨텍스트 및 RAG 시스템 환경 검증"""
-    issues = []
-    warnings = []
+    parser.add_argument(
+        '--non-interactive', '-n',
+        action='store_true',
+        help='비대화형 모드 (사용자 입력 최소화)'
+    )
     
-    # 기본 input_data 구조 확인
-    input_data_path = Path("input_data")
-    if not input_data_path.exists():
-        issues.append("input_data 폴더가 존재하지 않습니다")
+    parser.add_argument(
+        '--debug', '-d',
+        action='store_true',
+        help='디버그 모드 활성화'
+    )
     
-    # 데이터 파일 폴더 확인
-    data_files_path = input_data_path / "data_files"
-    if not data_files_path.exists():
-        warnings.append("input_data/data_files 폴더가 없습니다 (분석할 데이터 파일 위치)")
+    parser.add_argument(
+        '--output-dir', '-o',
+        type=str,
+        help='결과 출력 디렉토리 경로'
+    )
     
-    # 메타데이터 폴더 구조 확인
-    metadata_path = input_data_path / "metadata"
-    if not metadata_path.exists():
-        warnings.append("input_data/metadata 폴더가 없습니다 (비즈니스 컨텍스트 정보)")
-    else:
-        # 비즈니스 지식 파일들 확인
-        business_files = {
-            "business_dictionary.json": "업계 용어사전",
-            "domain_knowledge.md": "도메인 전문 지식",
-            "analysis_guidelines.md": "분석 가이드라인"
+    parser.add_argument(
+        '--config',
+        type=str,
+        help='설정 파일 경로 (JSON)'
+    )
+    
+    # 고급 옵션
+    parser.add_argument(
+        '--skip-stages',
+        type=str,
+        help='건너뛸 단계 번호 (쉼표로 구분, 예: 2,4)'
+    )
+    
+    parser.add_argument(
+        '--resume-session',
+        type=str,
+        help='이전 세션 ID로 재시작'
+    )
+    
+    parser.add_argument(
+        '--export-format',
+        choices=['html', 'pdf', 'markdown', 'json'],
+        default='html',
+        help='보고서 출력 형식'
+    )
+    
+    return parser.parse_args()
+
+def setup_environment(args: argparse.Namespace) -> Dict[str, Any]:
+    """환경 설정 및 초기화"""
+    
+    # 디렉토리 생성 확인
+    ensure_directories()
+    
+    # 로깅 초기화
+    if args.debug:
+        import os
+        os.environ['DEBUG'] = 'true'
+        os.environ['LOG_LEVEL'] = 'DEBUG'
+    
+    init_default_logging()
+    logger = get_logger(__name__)
+    
+    # 설정 로드
+    settings = get_settings()
+    
+    if args.output_dir:
+        settings['paths'].output_data_dir = Path(args.output_dir)
+        ensure_directories()
+    
+    logger.info("Text-to-Statistical-Test 시스템 시작")
+    logger.info(f"설정 로드 완료: {settings['application']}")
+    
+    return settings
+
+async def run_workflow(args: argparse.Namespace, settings: Dict[str, Any]) -> bool:
+    """워크플로우 실행"""
+    logger = get_logger(__name__)
+    
+    try:
+        # State Manager 초기화
+        state_manager = StateManager()
+        
+        # 이전 세션 복원 (옵션)
+        if args.resume_session:
+            if not state_manager.load_session(args.resume_session):
+                logger.warning(f"세션 {args.resume_session}을 찾을 수 없습니다. 새 세션을 시작합니다.")
+        
+        # Orchestrator 초기화
+        orchestrator = Orchestrator(state_manager=state_manager)
+        
+        # 초기 컨텍스트 설정
+        initial_context = {
+            'interactive': not args.non_interactive,
+            'debug': args.debug,
+            'export_format': args.export_format,
+            'start_stage': args.stage
         }
         
-        for file_name, description in business_files.items():
-            if not (metadata_path / file_name).exists():
-                warnings.append(f"{file_name} 파일이 없습니다 ({description})")
+        # 파일이 지정된 경우
+        if args.file:
+            initial_context['file_path'] = args.file
         
-        # DB 스키마 폴더 확인
-        schema_path = metadata_path / "database_schemas"
-        if not schema_path.exists():
-            warnings.append("database_schemas 폴더가 없습니다 (DB 스키마 구조 정보)")
-        else:
-            schema_files = {
-                "schema_definitions.json": "테이블 구조 정의",
-                "relationship_maps.json": "테이블 관계 매핑", 
-                "column_descriptions.json": "컬럼 상세 설명"
-            }
+        # 건너뛸 단계 설정
+        if args.skip_stages:
+            skip_list = [int(s.strip()) for s in args.skip_stages.split(',')]
+            initial_context['skip_stages'] = skip_list
+        
+        # 워크플로우 실행
+        logger.info(f"{args.stage}단계부터 워크플로우 시작")
+        result = await orchestrator.execute_pipeline(
+            start_stage=args.stage,
+            initial_context=initial_context
+        )
+        
+        if result.get('success', False):
+            logger.info("✅ 워크플로우 실행 완료")
             
-            for file_name, description in schema_files.items():
-                if not (schema_path / file_name).exists():
-                    warnings.append(f"database_schemas/{file_name} 파일이 없습니다 ({description})")
-    
-    # RAG 인덱스 폴더 확인
-    rag_index_path = Path("resources/rag_index")
-    if not rag_index_path.exists():
-        warnings.append("RAG 인덱스 폴더가 없습니다 (최초 실행 시 자동 생성됩니다)")
-    
-    return issues, warnings
-
-
-def main():
-    """메인 실행 함수 - 비즈니스 컨텍스트 인식 자연어 요청 기반 AI 추천 분석"""
-    try:
-        # 명령행 인수 파싱
-        parser = create_argument_parser()
-        args = parser.parse_args()
-        
-        # 로깅 레벨 설정
-        if args.verbose:
-            logging.basicConfig(
-                level=logging.DEBUG,
-                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
+            # 결과 요약 출력
+            if 'final_report' in result:
+                print("\n" + "="*60)
+                print("📊 분석 결과 요약")
+                print("="*60)
+                print(result['final_report'].get('summary', '요약 정보 없음'))
+                
+            # 출력 파일 정보
+            if 'output_files' in result:
+                print(f"\n📁 결과 파일들:")
+                for file_path in result['output_files']:
+                    print(f"  - {file_path}")
+            
+            return True
         else:
-            logging.basicConfig(
-                level=logging.WARNING,
-                format='%(levelname)s - %(message)s'
-            )
+            logger.error("❌ 워크플로우 실행 실패")
+            if 'error_message' in result:
+                print(f"오류: {result['error_message']}")
+            return False
+            
+    except KeyboardInterrupt:
+        logger.info("사용자에 의해 실행이 중단되었습니다.")
+        return False
+    except Exception as e:
+        logger.error(f"워크플로우 실행 중 예외 발생: {e}", exc_info=True)
+        print(f"❌ 시스템 오류: {e}")
+        return False
+
+def print_welcome_message():
+    """환영 메시지 출력"""
+    print("\n" + "="*70)
+    print("🤖 Text-to-Statistical-Test")
+    print("="*70)
+    print("RAG 기반 Agentic AI 통계 분석 시스템에 오신 것을 환영합니다!")
+    print("")
+    print("🎯 이 시스템은 다음 8단계로 진행됩니다:")
+    print("  1️⃣  데이터 파일 선택 및 초기 이해")
+    print("  2️⃣  사용자 자연어 요청 및 목표 정의")
+    print("  3️⃣  데이터 심층 분석 및 요약")
+    print("  4️⃣  Agentic LLM의 분석 전략 제안")
+    print("  5️⃣  사용자 피드백 기반 분석 방식 구체화")
+    print("  6️⃣  RAG 기반 Agentic LLM의 데이터 분석 계획 수립")
+    print("  7️⃣  Agentic LLM의 자율적 통계 검정")
+    print("  8️⃣  Agentic LLM의 보고서 생성 및 해석")
+    print("")
+    print("💡 도움이 필요하시면 언제든 'help' 또는 '도움말'을 입력하세요.")
+    print("="*70 + "\n")
+
+async def main():
+    """메인 함수"""
+    try:
+        # 명령행 인자 파싱
+        args = parse_arguments()
         
-        # 환영 메시지 및 시작 정보 출력
-        if not args.no_welcome:
-            print_startup_info()
+        # 대화형 모드인 경우 환영 메시지 출력
+        if not args.non_interactive:
             print_welcome_message()
         
-        # OpenAI API 환경 설정 검증
-        print("🔧 OpenAI API 환경 설정 검증 중...")
-        try:
-            validate_settings()
-            print("✅ OpenAI API 설정 완료!")
-        except Exception as e:
-            print(f"❌ 환경 설정 오류: {e}")
-            print("📋 해결 방법:")
-            print("1. .env 파일이 존재하는지 확인")
-            print("2. 올바른 OPENAI_API_KEY가 설정되었는지 확인") 
-            print("3. OPENAI_MODEL=gpt-4o로 설정되었는지 확인")
-            print("4. poetry run python setup_project.py를 실행하여 초기 설정 수행")
-            return 1
+        # 환경 설정
+        settings = setup_environment(args)
         
-        # 비즈니스 컨텍스트 및 RAG 시스템 환경 검증
-        print("🏢 비즈니스 컨텍스트 및 RAG 시스템 환경 검증 중...")
-        issues, warnings = validate_business_context_setup()
+        # 워크플로우 실행
+        success = await run_workflow(args, settings)
         
-        if issues:
-            print("❌ 치명적인 문제 발견:")
-            for issue in issues:
-                print(f"   • {issue}")
-            print("📋 poetry run python setup_project.py를 실행하여 프로젝트를 초기화해주세요.")
-            return 1
+        # 종료 코드 반환
+        return 0 if success else 1
         
-        if warnings:
-            print("⚠️ 주의사항 (선택적 기능):")
-            for warning in warnings:
-                print(f"   • {warning}")
-            print("💡 완전한 비즈니스 컨텍스트 기능을 위해서는 setup_project.py 실행을 권장합니다.")
-            print()
-        else:
-            print("✅ 비즈니스 컨텍스트 환경 설정 완료!")
-        
-        # 시스템 의존성 및 RAG 시스템 초기화
-        print("🔨 시스템 컴포넌트 및 Enhanced RAG 시스템 초기화 중...")
-        print("   📥 BCEmbedding 모델 로딩...")
-        print("   🗄️ 비즈니스 지식베이스 인덱싱...")
-        print("   🔗 DB 스키마 정보 매핑...")
-        try:
-            dependencies = setup_dependencies()
-            print("✅ Enhanced RAG 시스템 초기화 완료!")
-        except Exception as e:
-            print(f"❌ 시스템 초기화 실패: {e}")
-            if args.verbose:
-                import traceback
-                traceback.print_exc()
-            print("💡 임베딩 모델 다운로드 중일 수 있습니다. 잠시 후 다시 시도해주세요.")
-            return 1
-        
-        # 비즈니스 컨텍스트 인식 자연어 요청 기반 대화형 모드 실행
-        print("🚀 비즈니스 컨텍스트 인식 분석 모드를 시작합니다...")
-        print("🏢 업계 지식 및 DB 스키마 정보를 활용한 지능형 분석이 가능합니다.")
-        print("=" * 70)
-        run_interactive_mode(dependencies, args.data)
-        
-        return 0
-        
-    except KeyboardInterrupt:
-        print("\n\n👋 사용자가 프로그램을 중단했습니다.")
-        print("분석 세션이 안전하게 종료되었습니다.")
-        return 0
     except Exception as e:
-        print(f"❌ 예상치 못한 오류: {e}")
-        if args.verbose if 'args' in locals() else False:
-            import traceback
-            traceback.print_exc()
+        print(f"❌ 시스템 초기화 오류: {e}")
         return 1
 
-
 if __name__ == "__main__":
-    exit_code = main()
+    # Python 3.7+ 호환성
+    if sys.version_info >= (3, 7):
+        exit_code = asyncio.run(main())
+    else:
+        loop = asyncio.get_event_loop()
+        exit_code = loop.run_until_complete(main())
+        loop.close()
+    
     sys.exit(exit_code) 

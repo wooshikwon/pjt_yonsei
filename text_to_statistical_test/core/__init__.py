@@ -1,17 +1,27 @@
 """
-Core 모듈: LLM Agent 기반 통계 검정 자동화 시스템의 핵심 구성 요소
+Core Package
 
-이 모듈은 워크플로우 관리, 상태 전이, 컨텍스트 관리 등 시스템의 핵심 로직을 포함합니다.
+Text-to-Statistical-Test 시스템의 핵심 로직을 담고 있는 패키지
+- pipeline: 8단계 워크플로우 모듈
+- rag: RAG(Retrieval Augmented Generation) 시스템
+- agent: Agentic LLM 시스템
+- workflow: 워크플로우 오케스트레이션
+- reporting: 결과 보고 및 시각화
 """
 
-from .agent import LLMAgent
-from .workflow_manager import WorkflowManager
-from .decision_engine import DecisionEngine
-from .context_manager import ContextManager
+from .pipeline import *
+from . import rag
+from . import agent
+from . import workflow
+from . import reporting
+
+__version__ = "1.0.0"
+__author__ = "Text-to-Statistical-Test Team"
 
 __all__ = [
-    'LLMAgent',
-    'WorkflowManager', 
-    'DecisionEngine',
-    'ContextManager'
+    'pipeline',
+    'rag', 
+    'agent',
+    'workflow',
+    'reporting'
 ] 

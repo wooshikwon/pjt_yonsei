@@ -1,0 +1,198 @@
+{
+  "statistical_methods": {
+    "parametric_tests": {
+      "t_test": {
+        "name": "T-검정",
+        "types": {
+          "one_sample": {
+            "name": "일표본 T-검정",
+            "description": "모집단 평균과 표본 평균 비교",
+            "assumptions": ["정규성", "독립성"],
+            "min_sample_size": 30,
+            "use_cases": ["단일 그룹의 평균이 특정 값과 다른지 검정"]
+          },
+          "independent_two_sample": {
+            "name": "독립표본 T-검정",
+            "description": "두 독립 그룹 간 평균 비교",
+            "assumptions": ["정규성", "등분산성", "독립성"],
+            "min_sample_size": 15,
+            "use_cases": ["두 그룹의 평균이 다른지 검정"]
+          },
+          "paired": {
+            "name": "대응표본 T-검정",
+            "description": "동일 대상의 처치 전후 평균 비교",
+            "assumptions": ["차이값의 정규성", "독립성"],
+            "min_sample_size": 10,
+            "use_cases": ["전후 비교", "쌍을 이룬 데이터 비교"]
+          }
+        }
+      },
+      "anova": {
+        "name": "분산분석 (ANOVA)",
+        "types": {
+          "one_way": {
+            "name": "일원분산분석",
+            "description": "3개 이상 그룹 간 평균 비교",
+            "assumptions": ["정규성", "등분산성", "독립성"],
+            "min_sample_size": 20,
+            "use_cases": ["여러 그룹의 평균 차이 검정"],
+            "post_hoc": ["Tukey HSD", "Bonferroni", "Scheffe"]
+          },
+          "two_way": {
+            "name": "이원분산분석",
+            "description": "두 독립변수의 주효과 및 상호작용 검정",
+            "assumptions": ["정규성", "등분산성", "독립성"],
+            "min_sample_size": 30,
+            "use_cases": ["두 요인의 효과 및 상호작용 검정"]
+          }
+        }
+      },
+      "regression": {
+        "name": "회귀분석",
+        "types": {
+          "simple_linear": {
+            "name": "단순선형회귀",
+            "description": "하나의 독립변수로 종속변수 예측",
+            "assumptions": ["선형성", "정규성", "등분산성", "독립성"],
+            "min_sample_size": 30,
+            "use_cases": ["두 연속변수 간 관계 분석"]
+          },
+          "multiple_linear": {
+            "name": "다중선형회귀",
+            "description": "여러 독립변수로 종속변수 예측",
+            "assumptions": ["선형성", "정규성", "등분산성", "독립성", "다중공선성 없음"],
+            "min_sample_size": 50,
+            "use_cases": ["여러 요인이 결과에 미치는 영향 분석"]
+          },
+          "logistic": {
+            "name": "로지스틱 회귀",
+            "description": "범주형 종속변수 예측",
+            "assumptions": ["독립성", "다중공선성 없음"],
+            "min_sample_size": 100,
+            "use_cases": ["이진 결과 예측", "확률 모델링"]
+          }
+        }
+      }
+    },
+    "nonparametric_tests": {
+      "mann_whitney": {
+        "name": "Mann-Whitney U 검정",
+        "description": "두 독립 그룹 간 순위 비교 (비모수)",
+        "assumptions": ["독립성"],
+        "min_sample_size": 10,
+        "use_cases": ["정규성 가정 위배시 두 그룹 비교"],
+        "parametric_alternative": "independent_two_sample_t_test"
+      },
+      "wilcoxon": {
+        "name": "Wilcoxon 부호순위 검정",
+        "description": "대응 쌍의 차이 검정 (비모수)",
+        "assumptions": ["독립성"],
+        "min_sample_size": 8,
+        "use_cases": ["정규성 가정 위배시 대응표본 비교"],
+        "parametric_alternative": "paired_t_test"
+      },
+      "kruskal_wallis": {
+        "name": "Kruskal-Wallis 검정",
+        "description": "3개 이상 그룹 간 순위 비교 (비모수)",
+        "assumptions": ["독립성"],
+        "min_sample_size": 15,
+        "use_cases": ["정규성 가정 위배시 여러 그룹 비교"],
+        "parametric_alternative": "one_way_anova",
+        "post_hoc": ["Dunn's test"]
+      }
+    },
+    "categorical_tests": {
+      "chi_square": {
+        "name": "카이제곱 검정",
+        "types": {
+          "independence": {
+            "name": "독립성 검정",
+            "description": "두 범주형 변수 간 연관성 검정",
+            "assumptions": ["기댓값 ≥ 5"],
+            "min_sample_size": 50,
+            "use_cases": ["범주형 변수 간 관계 분석"]
+          },
+          "goodness_of_fit": {
+            "name": "적합도 검정",
+            "description": "관찰된 분포와 기댓값 분포 비교",
+            "assumptions": ["기댓값 ≥ 5"],
+            "min_sample_size": 30,
+            "use_cases": ["분포 적합성 검정"]
+          }
+        }
+      },
+      "fisher_exact": {
+        "name": "Fisher 정확검정",
+        "description": "소표본 2x2 분할표의 연관성 검정",
+        "assumptions": ["무"],
+        "min_sample_size": 5,
+        "use_cases": ["작은 표본의 범주형 변수 관계 분석"],
+        "alternative_to": "chi_square_independence"
+      }
+    },
+    "correlation_tests": {
+      "pearson": {
+        "name": "피어슨 상관분석",
+        "description": "두 연속변수 간 선형 관계 강도",
+        "assumptions": ["정규성", "선형성"],
+        "min_sample_size": 30,
+        "use_cases": ["선형 관계 분석"]
+      },
+      "spearman": {
+        "name": "스피어만 상관분석",
+        "description": "두 변수 간 순위 기반 단조 관계",
+        "assumptions": ["무"],
+        "min_sample_size": 20,
+        "use_cases": ["비선형 단조 관계 분석", "이상치 존재시"],
+        "nonparametric_alternative": "pearson"
+      }
+    },
+    "assumption_tests": {
+      "normality": {
+        "shapiro_wilk": {
+          "name": "Shapiro-Wilk 검정",
+          "description": "정규성 검정",
+          "sample_size_range": [3, 5000],
+          "null_hypothesis": "데이터가 정규분포를 따름"
+        },
+        "kolmogorov_smirnov": {
+          "name": "Kolmogorov-Smirnov 검정",
+          "description": "정규성 검정 (대표본)",
+          "sample_size_range": [50, "unlimited"],
+          "null_hypothesis": "데이터가 정규분포를 따름"
+        }
+      },
+      "homogeneity": {
+        "levene": {
+          "name": "Levene 검정",
+          "description": "등분산성 검정",
+          "robust": true,
+          "null_hypothesis": "그룹 간 분산이 같음"
+        },
+        "bartlett": {
+          "name": "Bartlett 검정",
+          "description": "등분산성 검정 (정규성 가정)",
+          "robust": false,
+          "null_hypothesis": "그룹 간 분산이 같음"
+        }
+      }
+    }
+  },
+  "selection_criteria": {
+    "data_type": {
+      "continuous": ["t_test", "anova", "regression", "correlation"],
+      "ordinal": ["mann_whitney", "wilcoxon", "kruskal_wallis", "spearman"],
+      "categorical": ["chi_square", "fisher_exact"]
+    },
+    "research_design": {
+      "between_subjects": ["independent_t_test", "one_way_anova", "mann_whitney"],
+      "within_subjects": ["paired_t_test", "repeated_anova", "wilcoxon"],
+      "mixed_design": ["mixed_anova"]
+    },
+    "sample_size": {
+      "small": ["nonparametric_tests", "fisher_exact"],
+      "medium": ["t_test", "basic_anova"],
+      "large": ["complex_anova", "regression", "chi_square"]
+    }
+  }
+} 

@@ -1,0 +1,118 @@
+{
+  "workflow_spec": {
+    "name": "Text-to-Statistical-Test Workflow",
+    "version": "1.0.0",
+    "description": "8단계 워크플로우를 통한 자동 통계 분석 시스템",
+    "stages": [
+      {
+        "stage_number": 1,
+        "name": "데이터 파일 선택 및 초기 이해",
+        "module": "core.pipeline.data_selection",
+        "class": "DataSelectionStep",
+        "description": "사용자가 분석할 데이터 파일을 선택하고 기본적인 메타정보를 파악",
+        "inputs": ["file_path (optional)", "file_number (optional)", "interactive (optional)"],
+        "outputs": ["selected_file", "file_info", "data_preview", "metadata", "data_object"],
+        "dependencies": [],
+        "estimated_time_seconds": 30,
+        "interactive": true
+      },
+      {
+        "stage_number": 2,
+        "name": "사용자 자연어 요청 및 목표 정의",
+        "module": "core.pipeline.user_request",
+        "class": "UserRequestStep", 
+        "description": "Multi-turn 대화를 통해 사용자의 분석 목표와 요구사항을 명확히 함",
+        "inputs": ["data_info", "user_input (optional)"],
+        "outputs": ["analysis_goals", "clarified_requirements", "conversation_context"],
+        "dependencies": [1],
+        "estimated_time_seconds": 120,
+        "interactive": true
+      },
+      {
+        "stage_number": 3,
+        "name": "데이터 심층 분석 및 요약",
+        "module": "core.pipeline.data_summary",
+        "class": "DataSummaryStep",
+        "description": "데이터의 기술 통계, 변수 분포, 잠재적 이슈 등을 심층 분석",
+        "inputs": ["data_object", "analysis_goals"],
+        "outputs": ["descriptive_stats", "data_quality_report", "variable_analysis", "recommendations"],
+        "dependencies": [1, 2],
+        "estimated_time_seconds": 90,
+        "interactive": false
+      },
+      {
+        "stage_number": 4,
+        "name": "Agentic LLM의 분석 전략 제안",
+        "module": "core.pipeline.analysis_proposal",
+        "class": "AnalysisProposalStep",
+        "description": "RAG를 활용하여 가능한 분석 방법들과 각 방법의 장단점을 제시",
+        "inputs": ["data_summary", "analysis_goals", "rag_context"],
+        "outputs": ["proposed_methods", "method_comparisons", "recommendations", "rationale"],
+        "dependencies": [2, 3],
+        "estimated_time_seconds": 60,
+        "interactive": false
+      },
+      {
+        "stage_number": 5,
+        "name": "사용자 피드백 기반 분석 방식 구체화",
+        "module": "core.pipeline.user_selection",
+        "class": "UserSelectionStep",
+        "description": "사용자 피드백을 반영하여 최종 분석 계획을 확정",
+        "inputs": ["proposed_methods", "user_feedback (optional)"],
+        "outputs": ["final_analysis_plan", "selected_methods", "user_preferences"],
+        "dependencies": [4],
+        "estimated_time_seconds": 90,
+        "interactive": true
+      },
+      {
+        "stage_number": 6,
+        "name": "RAG 기반 Agentic LLM의 데이터 분석 계획 수립",
+        "module": "core.pipeline.agent_analysis",
+        "class": "AgentAnalysisStep",
+        "description": "RAG를 활용하여 구체적인 통계 분석 실행 계획을 수립",
+        "inputs": ["final_analysis_plan", "data_object", "rag_templates"],
+        "outputs": ["execution_plan", "code_templates", "analysis_steps", "validation_criteria"],
+        "dependencies": [5],
+        "estimated_time_seconds": 120,
+        "interactive": false
+      },
+      {
+        "stage_number": 7,
+        "name": "Agentic LLM의 자율적 통계 검정",
+        "module": "core.pipeline.agent_execution", 
+        "class": "AgentExecutionStep",
+        "description": "자율적으로 통계 검정 전 과정을 수행하고 동적 조정",
+        "inputs": ["execution_plan", "data_object"],
+        "outputs": ["test_results", "visualizations", "validation_results", "execution_log"],
+        "dependencies": [6],
+        "estimated_time_seconds": 180,
+        "interactive": false
+      },
+      {
+        "stage_number": 8,
+        "name": "Agentic LLM의 보고서 생성 및 해석",
+        "module": "core.pipeline.report_generation",
+        "class": "ReportGenerationStep",
+        "description": "결과를 종합하여 사용자 친화적인 보고서 생성",
+        "inputs": ["test_results", "visualizations", "analysis_context"],
+        "outputs": ["final_report", "summary", "recommendations", "exported_files"],
+        "dependencies": [7],
+        "estimated_time_seconds": 90,
+        "interactive": false
+      }
+    ],
+    "execution_rules": {
+      "allow_stage_skip": false,
+      "require_dependency_completion": true,
+      "max_retry_attempts": 3,
+      "timeout_per_stage_minutes": 10,
+      "save_intermediate_results": true
+    },
+    "error_handling": {
+      "on_stage_failure": "pause_and_notify",
+      "on_dependency_failure": "halt_execution", 
+      "on_timeout": "user_intervention",
+      "recovery_strategies": ["retry", "skip_with_warning", "manual_intervention"]
+    }
+  }
+} 

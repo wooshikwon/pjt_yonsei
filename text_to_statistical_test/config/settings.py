@@ -1,126 +1,138 @@
 """
-애플리케이션 전반의 설정값 관리
+Application Settings
 
-환경 변수에서 로드하거나 기본값을 제공하는 설정 중앙화 모듈
+통합 설정 파일
+- API 키 관리
+- 기본 경로 설정
+- LLM 모델 설정
+- 데이터베이스 설정 등
 """
 
 import os
 from pathlib import Path
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
 
-
-# 프로젝트 루트 경로
+# 프로젝트 루트 디렉토리
 PROJECT_ROOT = Path(__file__).parent.parent
 
-# LLM 관련 설정
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
-LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "gpt-4o")
-LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
-
-# OpenAI API 설정
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-# 워크플로우 설정
-WORKFLOW_FILE_PATH = str(PROJECT_ROOT / "resources" / "workflow_graph.json")
-
-# RAG 시스템 설정
-CODE_SNIPPETS_DIR = str(PROJECT_ROOT / "resources" / "code_snippets")
-RAG_INDEX_PATH = str(PROJECT_ROOT / "resources" / "rag_index" / "code_snippets.index")
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-ada-002")
-
-# 프롬프트 설정
-PROMPT_TEMPLATES_DIR = str(PROJECT_ROOT / "llm_services" / "prompts")
-
-# 데이터 경로 설정
-INPUT_DATA_DEFAULT_DIR = str(PROJECT_ROOT / "input_data")
-OUTPUT_RESULTS_DIR = str(PROJECT_ROOT / "output_results")
-
-# 로깅 설정
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-
-# 컨텍스트 관리 설정
-MAX_HISTORY_ITEMS = int(os.getenv("MAX_HISTORY_ITEMS", "20"))
-SUMMARIZATION_TRIGGER_COUNT = int(os.getenv("SUMMARIZATION_TRIGGER_COUNT", "10"))
-CONTEXT_TOKEN_LIMIT = int(os.getenv("CONTEXT_TOKEN_LIMIT", "3000"))
-
-# 코드 실행 설정
-CODE_EXECUTION_TIMEOUT = int(os.getenv("CODE_EXECUTION_TIMEOUT", "30"))
-SAFE_CODE_EXECUTION = os.getenv("SAFE_CODE_EXECUTION", "true").lower() == "true"
-
-# 보고서 설정
-REPORT_FORMAT = os.getenv("REPORT_FORMAT", "md")  # "md", "html", "pdf"
-
-# 개발/프로덕션 모드
-DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
-
-# 필수 디렉토리 생성 함수
-def ensure_directories():
-    """필요한 디렉토리들을 생성합니다."""
-    directories_to_create = [
-        INPUT_DATA_DEFAULT_DIR,
-        OUTPUT_RESULTS_DIR,
-        CODE_SNIPPETS_DIR,
-        "logs",  # 로그 디렉토리
-        "config",
-        "llm_services/prompts",
-        RAG_INDEX_PATH
-    ]
+@dataclass
+class LLMSettings:
+    """LLM 관련 설정"""
+    default_model: str = "gpt-4-turbo-preview"
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    max_tokens: int = 4000
+    temperature: float = 0.1
+    timeout: int = 60
     
-    for directory in directories_to_create:
-        if directory and not os.path.exists(directory):
-            try:
-                os.makedirs(directory, exist_ok=True)
-                print(f"📁 디렉토리 생성: {directory}")
-            except Exception as e:
-                print(f"⚠️  디렉토리 생성 실패 ({directory}): {e}")
+    def __post_init__(self):
+        """환경변수에서 API 키 로드"""
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
 
-# 설정 검증 함수
-def validate_settings():
-    """환경 설정 검증"""
-    errors = []
-    
-    # LLM 제공자 확인
-    if LLM_PROVIDER.lower() != "openai":
-        errors.append(f"지원하지 않는 LLM 제공자: {LLM_PROVIDER}. 'openai'만 지원됩니다.")
-    
-    # OpenAI API 키 확인
-    if LLM_PROVIDER.lower() == "openai":
-        if not os.getenv("OPENAI_API_KEY"):
-            errors.append("OPENAI_API_KEY 환경변수가 설정되지 않았습니다.")
-    
-    # 필수 디렉토리 경로 검증
-    required_dirs = [
-        WORKFLOW_FILE_PATH,
-        CODE_SNIPPETS_DIR,
-        INPUT_DATA_DEFAULT_DIR,
-        OUTPUT_RESULTS_DIR
-    ]
-    
-    for dir_path in required_dirs:
-        if not os.path.exists(os.path.dirname(dir_path)):
-            errors.append(f"필수 디렉토리가 존재하지 않습니다: {os.path.dirname(dir_path)}")
-    
-    if errors:
-        raise ValueError("환경 설정 오류:\n" + "\n".join(f"  • {error}" for error in errors))
+@dataclass  
+class PathSettings:
+    """경로 관련 설정"""
+    project_root: Path = PROJECT_ROOT
+    input_data_dir: Path = PROJECT_ROOT / "input_data"
+    data_files_dir: Path = PROJECT_ROOT / "input_data" / "data_files"
+    metadata_dir: Path = PROJECT_ROOT / "input_data" / "metadata"
+    output_data_dir: Path = PROJECT_ROOT / "output_data"
+    reports_dir: Path = PROJECT_ROOT / "output_data" / "reports"
+    visualizations_dir: Path = PROJECT_ROOT / "output_data" / "visualizations"
+    cache_dir: Path = PROJECT_ROOT / "output_data" / "analysis_cache"
+    logs_dir: Path = PROJECT_ROOT / "logs"
+    resources_dir: Path = PROJECT_ROOT / "resources"
+    knowledge_base_dir: Path = PROJECT_ROOT / "resources" / "knowledge_base"
 
-# 설정 요약 출력
-def print_current_settings():
-    """현재 설정값들을 출력합니다."""
-    print("⚙️  현재 설정:")
-    print(f"   LLM Provider: {LLM_PROVIDER}")
-    print(f"   LLM Model: {LLM_MODEL_NAME}")
-    print(f"   Input Data Dir: {INPUT_DATA_DEFAULT_DIR}")
-    print(f"   Output Dir: {OUTPUT_RESULTS_DIR}")
-    print(f"   Log Level: {LOG_LEVEL}")
+@dataclass
+class RAGSettings:
+    """RAG 시스템 설정"""
+    vector_store_type: str = "faiss"  # faiss, chroma, lancedb 등
+    embedding_model: str = "text-embedding-3-small"
+    chunk_size: int = 1000
+    chunk_overlap: int = 200
+    max_search_results: int = 10
+    similarity_threshold: float = 0.7
+    cache_ttl: int = 3600  # 1시간
 
-def get_api_status():
-    """API 키들의 상태를 확인합니다"""
-    status = {}
+@dataclass
+class DatabaseSettings:
+    """데이터베이스 설정 (필요시)"""
+    db_type: str = "sqlite"
+    db_host: str = "localhost"
+    db_port: int = 5432
+    db_name: str = "text_to_statistical_test"
+    db_user: Optional[str] = None
+    db_password: Optional[str] = None
+
+@dataclass
+class StatisticsSettings:
+    """통계 분석 설정"""
+    significance_level: float = 0.05
+    confidence_level: float = 0.95
+    bootstrap_samples: int = 1000
+    random_seed: int = 42
+    max_categories: int = 20  # 범주형 변수 최대 카테고리 수
+
+@dataclass
+class ApplicationSettings:
+    """애플리케이션 전체 설정"""
+    debug: bool = False
+    log_level: str = "INFO"
+    max_file_size_mb: int = 100
+    supported_file_formats: list = None
     
-    # OpenAI 상태 확인
-    openai_key = os.getenv("OPENAI_API_KEY")
-    status["openai"] = {
-        "available": bool(openai_key),
-        "key_preview": f"{openai_key[:10]}..." if openai_key else "없음"
+    def __post_init__(self):
+        if self.supported_file_formats is None:
+            self.supported_file_formats = ['.csv', '.xlsx', '.xls', '.json', '.parquet', '.tsv']
+
+# 설정 인스턴스 생성
+llm_settings = LLMSettings()
+path_settings = PathSettings()
+rag_settings = RAGSettings()
+db_settings = DatabaseSettings()
+stats_settings = StatisticsSettings()
+app_settings = ApplicationSettings()
+
+def get_settings() -> Dict[str, Any]:
+    """모든 설정을 딕셔너리로 반환"""
+    return {
+        'llm': llm_settings,
+        'paths': path_settings,
+        'rag': rag_settings,
+        'database': db_settings,
+        'statistics': stats_settings,
+        'application': app_settings
     }
+
+def update_settings(settings_dict: Dict[str, Any]) -> None:
+    """설정 업데이트"""
+    global llm_settings, path_settings, rag_settings, db_settings, stats_settings, app_settings
     
-    return status 
+    if 'llm' in settings_dict:
+        for key, value in settings_dict['llm'].items():
+            if hasattr(llm_settings, key):
+                setattr(llm_settings, key, value)
+    
+    # 다른 설정들도 유사하게 처리...
+    
+def ensure_directories():
+    """필요한 디렉토리들이 존재하는지 확인하고 생성"""
+    directories = [
+        path_settings.input_data_dir,
+        path_settings.data_files_dir,
+        path_settings.metadata_dir,
+        path_settings.output_data_dir,
+        path_settings.reports_dir,
+        path_settings.visualizations_dir,
+        path_settings.cache_dir,
+        path_settings.logs_dir
+    ]
+    
+    for directory in directories:
+        directory.mkdir(parents=True, exist_ok=True)
+
+# 시작시 디렉토리 생성
+ensure_directories() 

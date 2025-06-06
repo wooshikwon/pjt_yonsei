@@ -12,7 +12,7 @@ from .analysis_proposal import AnalysisProposalStep
 from .user_selection import UserSelectionStep
 from .agent_analysis import AgentAnalysisStep
 from .agent_execution import AgentExecutionStep
-from .agent_reporting import AgentReportingPipeline
+from .agent_reporting import AgentReportingStep
 
 # 추후 추가될 파이프라인들
 # from .analysis_proposal import AnalysisProposalPipeline
@@ -29,7 +29,7 @@ __all__ = [
     'UserSelectionStep',
     'AgentAnalysisStep',
     'AgentExecutionStep',
-    'AgentReportingPipeline',
+    'AgentReportingStep',
     # 'AnalysisProposalPipeline',
     # 'MethodSelectionPipeline',
     # 'AgentAnalysisPipeline',
@@ -41,50 +41,50 @@ __all__ = [
 PIPELINE_STEPS = {
     1: {
         'name': 'data_selection',
-        'class': 'DataSelectionPipeline',
+        'class': 'DataSelectionStep',
         'description': '데이터 파일 선택',
         'implemented': True
     },
     2: {
         'name': 'user_request',
-        'class': 'UserRequestPipeline', 
+        'class': 'UserRequestStep', 
         'description': '사용자 자연어 요청 처리',
         'implemented': True
     },
     3: {
         'name': 'data_summary',
-        'class': 'DataSummaryPipeline',
+        'class': 'DataSummaryStep',
         'description': '데이터 요약 및 기본 통계',
         'implemented': True
     },
     4: {
         'name': 'analysis_proposal',
-        'class': 'AnalysisProposalPipeline',
+        'class': 'AnalysisProposalStep',
         'description': '시스템 분석 제안',
-        'implemented': False
+        'implemented': True
     },
     5: {
-        'name': 'method_selection',
-        'class': 'MethodSelectionPipeline',
+        'name': 'user_selection',
+        'class': 'UserSelectionStep',
         'description': '사용자 분석 방식 선택',
-        'implemented': False
+        'implemented': True
     },
     6: {
         'name': 'agent_analysis',
-        'class': 'AgentAnalysisPipeline',
+        'class': 'AgentAnalysisStep',
         'description': 'RAG를 활용한 LLM AGENT 데이터 분석',
-        'implemented': False
+        'implemented': True
     },
     7: {
-        'name': 'agent_testing',
-        'class': 'AgentTestingPipeline',
+        'name': 'agent_execution',
+        'class': 'AgentExecutionStep',
         'description': 'LLM AGENT 통계 검정 (AGENTIC FLOW)',
-        'implemented': False
+        'implemented': True
     },
     8: {
         'name': 'agent_reporting',
-        'class': 'AgentReportingPipeline',
+        'class': 'AgentReportingStep',
         'description': 'LLM AGENT 보고서 생성',
-        'implemented': False
+        'implemented': True
     }
 } 

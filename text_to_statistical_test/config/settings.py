@@ -13,8 +13,23 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
-# 프로젝트 루트 디렉토리
-PROJECT_ROOT = Path(__file__).parent.parent
+# .env 파일 로딩 (중앙 집중식 환경변수 관리)
+try:
+    from dotenv import load_dotenv
+    
+    # 프로젝트 루트에서 .env 파일 찾기
+    PROJECT_ROOT = Path(__file__).parent.parent
+    env_file = PROJECT_ROOT / '.env'
+    
+    if env_file.exists():
+        load_dotenv(env_file, override=False)  # 기존 환경변수 우선
+    
+except ImportError:
+    # dotenv가 없어도 실행 가능하도록 (시스템 환경변수 사용)
+    PROJECT_ROOT = Path(__file__).parent.parent
+except Exception:
+    # 기타 오류 시에도 계속 진행
+    PROJECT_ROOT = Path(__file__).parent.parent
 
 @dataclass
 class LLMSettings:

@@ -11,14 +11,13 @@ import asyncio
 import argparse
 from pathlib import Path
 from typing import Dict, Any, Optional
+import os
 
 # 프로젝트 루트를 Python 경로에 추가
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config.settings import get_settings, ensure_directories
-from config.logging_config import init_default_logging, get_logger
-from core.workflow.orchestrator import Orchestrator
-from core.workflow.state_manager import StateManager
+# 중앙 집중식 설정 로드 (여기서 .env 파일이 자동으로 로드됨)
+from config.settings import get_settings
 
 def parse_arguments() -> argparse.Namespace:
     """명령행 인자 파싱"""
@@ -69,22 +68,9 @@ def parse_arguments() -> argparse.Namespace:
     )
     
     parser.add_argument(
-        '--config',
-        type=str,
-        help='설정 파일 경로 (JSON)'
-    )
-    
-    # 고급 옵션
-    parser.add_argument(
         '--skip-stages',
         type=str,
         help='건너뛸 단계 번호 (쉼표로 구분, 예: 2,4)'
-    )
-    
-    parser.add_argument(
-        '--resume-session',
-        type=str,
-        help='이전 세션 ID로 재시작'
     )
     
     parser.add_argument(
@@ -96,45 +82,56 @@ def parse_arguments() -> argparse.Namespace:
     
     return parser.parse_args()
 
-def setup_environment(args: argparse.Namespace) -> Dict[str, Any]:
+def setup_environment(args: argparse.Namespace) -> None:
     """환경 설정 및 초기화"""
     
-    # 디렉토리 생성 확인
-    ensure_directories()
+    # 필수 디렉토리 생성
+    directories = [
+        'input_data/data_files',
+        'input_data/metadata',
+        'output_data/reports',
+        'output_data/visualizations',
+        'output_data/analysis_cache',
+        'logs'
+    ]
     
-    # 로깅 초기화
-    if args.debug:
-        import os
+    for dir_path in directories:
+        Path(dir_path).mkdir(parents=True, exist_ok=True)
+    
+    # 중앙화된 로깅 설정 사용
+    from config.logging_config import setup_logging
+    
+    # 환경 변수 설정
+    if args.debug or os.getenv('DEBUG', 'false').lower() == 'true':
         os.environ['DEBUG'] = 'true'
         os.environ['LOG_LEVEL'] = 'DEBUG'
     
-    init_default_logging()
-    logger = get_logger(__name__)
+    # 비대화형 모드 설정
+    if args.non_interactive:
+        os.environ['NON_INTERACTIVE'] = 'true'
     
-    # 설정 로드
-    settings = get_settings()
+    # 로깅 레벨 결정
+    log_level = 'DEBUG' if args.debug else os.getenv('LOG_LEVEL', 'INFO')
     
-    if args.output_dir:
-        settings['paths'].output_data_dir = Path(args.output_dir)
-        ensure_directories()
-    
-    logger.info("Text-to-Statistical-Test 시스템 시작")
-    logger.info(f"설정 로드 완료: {settings['application']}")
-    
-    return settings
+    # 로깅 설정 적용
+    setup_logging(
+        log_level=log_level,
+        console_output=True,
+        structured_logging=True
+    )
 
-async def run_workflow(args: argparse.Namespace, settings: Dict[str, Any]) -> bool:
+async def run_workflow(args: argparse.Namespace) -> bool:
     """워크플로우 실행"""
-    logger = get_logger(__name__)
+    import logging
+    logger = logging.getLogger(__name__)
     
     try:
+        # 필요한 모듈들을 지연 import (의존성 오류 방지)
+        from core.workflow.orchestrator import Orchestrator
+        from core.workflow.state_manager import StateManager
+        
         # State Manager 초기화
         state_manager = StateManager()
-        
-        # 이전 세션 복원 (옵션)
-        if args.resume_session:
-            if not state_manager.load_session(args.resume_session):
-                logger.warning(f"세션 {args.resume_session}을 찾을 수 없습니다. 새 세션을 시작합니다.")
         
         # Orchestrator 초기화
         orchestrator = Orchestrator(state_manager=state_manager)
@@ -149,6 +146,9 @@ async def run_workflow(args: argparse.Namespace, settings: Dict[str, Any]) -> bo
         
         # 파일이 지정된 경우
         if args.file:
+            if not os.path.exists(args.file):
+                logger.error(f"파일을 찾을 수 없습니다: {args.file}")
+                return False
             initial_context['file_path'] = args.file
         
         # 건너뛸 단계 설정
@@ -157,7 +157,7 @@ async def run_workflow(args: argparse.Namespace, settings: Dict[str, Any]) -> bo
             initial_context['skip_stages'] = skip_list
         
         # 워크플로우 실행
-        logger.info(f"{args.stage}단계부터 워크플로우 시작")
+        logger.info(f"워크플로우 시작: {args.stage}단계부터")
         result = await orchestrator.execute_pipeline(
             start_stage=args.stage,
             initial_context=initial_context
@@ -167,27 +167,35 @@ async def run_workflow(args: argparse.Namespace, settings: Dict[str, Any]) -> bo
             logger.info("✅ 워크플로우 실행 완료")
             
             # 결과 요약 출력
-            if 'final_report' in result:
-                print("\n" + "="*60)
-                print("📊 분석 결과 요약")
-                print("="*60)
-                print(result['final_report'].get('summary', '요약 정보 없음'))
-                
+            print("\n" + "="*60)
+            print("📊 분석 완료!")
+            print("="*60)
+            
+            if 'comprehensive_report' in result:
+                report = result['comprehensive_report']
+                print(f"\n📋 보고서 제목: {report.get('report_metadata', {}).get('title', 'N/A')}")
+                print(f"🎯 분석 방법: {report.get('report_metadata', {}).get('analysis_method', 'N/A')}")
+            
             # 출력 파일 정보
-            if 'output_files' in result:
-                print(f"\n📁 결과 파일들:")
-                for file_path in result['output_files']:
+            if 'save_result' in result and result['save_result'].get('success'):
+                print(f"\n📁 결과 파일:")
+                for file_path in result['save_result'].get('files_generated', []):
                     print(f"  - {file_path}")
             
             return True
         else:
             logger.error("❌ 워크플로우 실행 실패")
-            if 'error_message' in result:
-                print(f"오류: {result['error_message']}")
+            if 'error' in result:
+                print(f"오류: {result['error']}")
             return False
             
     except KeyboardInterrupt:
         logger.info("사용자에 의해 실행이 중단되었습니다.")
+        return False
+    except ImportError as e:
+        logger.error(f"모듈 import 오류: {e}")
+        print(f"❌ 의존성 오류: {e}")
+        print("다음 명령으로 의존성을 설치하세요: poetry install")
         return False
     except Exception as e:
         logger.error(f"워크플로우 실행 중 예외 발생: {e}", exc_info=True)
@@ -197,53 +205,86 @@ async def run_workflow(args: argparse.Namespace, settings: Dict[str, Any]) -> bo
 def print_welcome_message():
     """환영 메시지 출력"""
     print("\n" + "="*70)
-    print("🤖 Text-to-Statistical-Test")
+    print("🤖 Text-to-Statistical-Test(TTST)")
+    print("   RAG 기반 Agentic AI 통계 분석 시스템")
     print("="*70)
-    print("RAG 기반 Agentic AI 통계 분석 시스템에 오신 것을 환영합니다!")
-    print("")
-    print("🎯 이 시스템은 다음 8단계로 진행됩니다:")
-    print("  1️⃣  데이터 파일 선택 및 초기 이해")
-    print("  2️⃣  사용자 자연어 요청 및 목표 정의")
-    print("  3️⃣  데이터 심층 분석 및 요약")
-    print("  4️⃣  Agentic LLM의 분석 전략 제안")
-    print("  5️⃣  사용자 피드백 기반 분석 방식 구체화")
-    print("  6️⃣  RAG 기반 Agentic LLM의 데이터 분석 계획 수립")
-    print("  7️⃣  Agentic LLM의 자율적 통계 검정")
-    print("  8️⃣  Agentic LLM의 보고서 생성 및 해석")
-    print("")
-    print("💡 도움이 필요하시면 언제든 'help' 또는 '도움말'을 입력하세요.")
-    print("="*70 + "\n")
+    print()
+
+def check_prerequisites() -> bool:
+    """필수 조건 확인"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Python 버전 확인
+    if sys.version_info < (3, 11):
+        logger.error("Python 3.11 이상이 필요합니다.")
+        return False
+    
+    # 설정 로드 상태 확인
+    try:
+        settings = get_settings()
+        llm_settings = settings['llm']
+        
+        # .env 파일 로드 상태 메시지
+        env_file = Path(__file__).parent / '.env'
+        if env_file.exists():
+            print(f"✅ 환경변수 파일 로드됨: {env_file}")
+        else:
+            print("⚠️  .env 파일을 찾을 수 없습니다. env.example을 참고하여 .env 파일을 생성하세요.")
+        
+    except Exception as e:
+        logger.error(f"설정 로드 실패: {e}")
+        return False
+    
+    # 필수 API 키 확인
+    missing_vars = []
+    
+    if not llm_settings.openai_api_key:
+        missing_vars.append('OPENAI_API_KEY')
+    
+    if missing_vars:
+        logger.error(f"❌ 다음 필수 환경 변수가 설정되지 않았습니다: {', '.join(missing_vars)}")
+        logger.error("해결 방법:")
+        logger.error("  1. env.example을 .env로 복사: cp env.example .env")
+        logger.error("  2. .env 파일에서 API 키를 실제 값으로 변경")
+        logger.error("  3. 또는 환경변수로 직접 설정: export OPENAI_API_KEY=your_key")
+        return False
+    
+    # 선택적 API 키 확인
+    if not llm_settings.anthropic_api_key:
+        logger.info("선택적 환경 변수 미설정: ANTHROPIC_API_KEY")
+    
+    logger.info("✅ 환경변수 확인 완료")
+    return True
 
 async def main():
     """메인 함수"""
-    try:
-        # 명령행 인자 파싱
-        args = parse_arguments()
-        
-        # 대화형 모드인 경우 환영 메시지 출력
-        if not args.non_interactive:
-            print_welcome_message()
-        
-        # 환경 설정
-        settings = setup_environment(args)
-        
-        # 워크플로우 실행
-        success = await run_workflow(args, settings)
-        
-        # 종료 코드 반환
-        return 0 if success else 1
-        
-    except Exception as e:
-        print(f"❌ 시스템 초기화 오류: {e}")
-        return 1
+    # 인자 파싱
+    args = parse_arguments()
+    
+    # 환경 설정
+    setup_environment(args)
+    
+    # 환영 메시지
+    if not args.non_interactive:
+        print_welcome_message()
+    
+    # 필수 조건 확인
+    if not check_prerequisites():
+        sys.exit(1)
+    
+    # 워크플로우 실행
+    success = await run_workflow(args)
+    
+    # 종료 코드 설정
+    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
-    # Python 3.7+ 호환성
-    if sys.version_info >= (3, 7):
-        exit_code = asyncio.run(main())
-    else:
-        loop = asyncio.get_event_loop()
-        exit_code = loop.run_until_complete(main())
-        loop.close()
-    
-    sys.exit(exit_code) 
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n\n프로그램이 사용자에 의해 중단되었습니다.")
+        sys.exit(130)
+    except Exception as e:
+        print(f"\n❌ 예상치 못한 오류가 발생했습니다: {e}")
+        sys.exit(1) 

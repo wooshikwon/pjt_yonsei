@@ -467,6 +467,51 @@ class KnowledgeStore:
             'last_updated': self.metadata.get('last_updated')
         }
     
+    def get_all_documents(self) -> List[Dict[str, Any]]:
+        """
+        모든 문서 조회
+        
+        Returns:
+            List[Dict[str, Any]]: 모든 문서 리스트
+        """
+        try:
+            all_documents = []
+            for doc_id, doc_info in self.vector_store.document_metadata.items():
+                document = {
+                    'doc_id': doc_id,
+                    'content': doc_info.get('text', ''),
+                    'metadata': doc_info.get('metadata', {}),
+                    'source': doc_info.get('metadata', {}).get('source', ''),
+                    'type': doc_info.get('metadata', {}).get('document_type', 'unknown'),
+                    'added_at': str(doc_info.get('added_at', ''))
+                }
+                all_documents.append(document)
+            
+            return all_documents
+            
+        except Exception as e:
+            self.logger.error(f"모든 문서 조회 오류: {e}")
+            return []
+    
+    def get_embeddings(self) -> List[Any]:
+        """
+        모든 문서의 임베딩 조회
+        
+        Returns:
+            List[Any]: 임베딩 리스트
+        """
+        try:
+            # FAISS 인덱스에서 모든 벡터 추출
+            if hasattr(self.vector_store, 'index') and self.vector_store.index.ntotal > 0:
+                vectors = self.vector_store.index.reconstruct_n(0, self.vector_store.index.ntotal)
+                return vectors
+            else:
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"임베딩 조회 오류: {e}")
+            return []
+
     def get_collections(self) -> List[str]:
         """
         사용 가능한 지식 컬렉션(카테고리) 목록 반환

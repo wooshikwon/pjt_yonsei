@@ -11,6 +11,72 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+class UIHelpers:
+    """UI 헬퍼 클래스 - 사용자 인터페이스 관련 기능들을 제공"""
+    
+    def __init__(self):
+        """UIHelpers 초기화"""
+        self.logger = logging.getLogger(__name__)
+    
+    def display_file_selection_menu(self, data_files: List[str]) -> Optional[str]:
+        """파일 선택 메뉴 표시"""
+        return display_file_selection_menu(data_files)
+    
+    def print_analysis_guide(self):
+        """분석 가이드 출력"""
+        return print_analysis_guide()
+    
+    def print_step_header(self, step_number: int, step_name: str, description: str = ""):
+        """파이프라인 단계 헤더 출력"""
+        return print_step_header(step_number, step_name, description)
+    
+    def print_data_preview(self, data_preview: Dict[str, Any], title: str = "데이터 미리보기"):
+        """데이터 미리보기 출력"""
+        return print_data_preview(data_preview, title)
+    
+    def print_file_info(self, file_info: Dict[str, Any]):
+        """파일 정보 출력"""
+        return print_file_info(file_info)
+    
+    def print_analysis_options(self, options: List[Dict[str, Any]]):
+        """분석 옵션 출력"""
+        return print_analysis_options(options)
+    
+    def get_user_input(self, prompt: str, input_type: str = "text", 
+                      valid_options: Optional[List[str]] = None) -> Optional[str]:
+        """사용자 입력 받기"""
+        return get_user_input(prompt, input_type, valid_options)
+    
+    def print_progress_bar(self, current: int, total: int, prefix: str = "진행률", 
+                          suffix: str = "완료", length: int = 40):
+        """진행률 바 출력"""
+        return print_progress_bar(current, total, prefix, suffix, length)
+    
+    def print_error_message(self, error_msg: str, error_type: str = "일반 오류"):
+        """오류 메시지 출력"""
+        return print_error_message(error_msg, error_type)
+    
+    def print_success_message(self, success_msg: str, details: Optional[str] = None):
+        """성공 메시지 출력"""
+        return print_success_message(success_msg, details)
+    
+    def clear_screen(self):
+        """화면 지우기"""
+        return clear_screen()
+    
+    def confirm_action(self, message: str) -> bool:
+        """사용자 확인"""
+        return confirm_action(message)
+    
+    def display_table(self, data: List[Dict[str, Any]], headers: Optional[List[str]] = None, 
+                     max_rows: int = 10):
+        """테이블 형태로 데이터 출력"""
+        return display_table(data, headers, max_rows)
+    
+    def wait_for_key(self, message: str = "계속하려면 Enter를 누르세요..."):
+        """키 입력 대기"""
+        return wait_for_key(message)
+
 def display_file_selection_menu(data_files: List[str]) -> Optional[str]:
     """
     파일 선택 메뉴 표시
@@ -25,6 +91,12 @@ def display_file_selection_menu(data_files: List[str]) -> Optional[str]:
         print("선택 가능한 파일이 없습니다.")
         return None
     
+    # 비대화형 모드에서는 첫 번째 파일 자동 선택
+    if os.getenv('NON_INTERACTIVE') == 'true':
+        selected_file = data_files[0]
+        print(f"✅ 자동 선택된 파일: {Path(selected_file).name}")
+        return selected_file
+    
     print("\n📁 사용 가능한 데이터 파일:")
     print("=" * 60)
     
@@ -33,38 +105,60 @@ def display_file_selection_menu(data_files: List[str]) -> Optional[str]:
         file_size_mb = Path(file_path).stat().st_size / (1024 * 1024)
         file_ext = Path(file_path).suffix.upper()
         
-        print(f"{i:2d}. {file_name}")
+        print(f" {i}. {file_name}")
         print(f"     📄 형식: {file_ext}  📊 크기: {file_size_mb:.1f}MB")
         print(f"     📂 경로: {file_path}")
         print()
     
     print("=" * 60)
     
-    while True:
+    max_attempts = 3
+    attempt = 0
+    
+    while attempt < max_attempts:
         try:
-            user_input = input(f"파일을 선택하세요 (1-{len(data_files)}, 0=취소): ").strip()
+            selection = input(f"파일을 선택하세요 (1-{len(data_files)}, 0=취소): ").strip()
             
-            if user_input == '0':
+            if selection == '0':
                 print("파일 선택이 취소되었습니다.")
                 return None
             
-            file_number = int(user_input)
-            
-            if 1 <= file_number <= len(data_files):
-                selected_file = data_files[file_number - 1]
-                print(f"✅ 선택된 파일: {Path(selected_file).name}")
-                return selected_file
-            else:
-                print(f"❌ 1-{len(data_files)} 범위의 번호를 입력해주세요.")
+            try:
+                file_index = int(selection) - 1
+                if 0 <= file_index < len(data_files):
+                    selected_file = data_files[file_index]
+                    print(f"✅ 선택된 파일: {Path(selected_file).name}")
+                    return selected_file
+                else:
+                    print(f"❌ 잘못된 선택입니다. 1-{len(data_files)} 사이의 숫자를 입력해주세요.")
+                    
+            except ValueError:
+                print("❌ 숫자를 입력해주세요.")
                 
-        except ValueError:
-            print("❌ 숫자를 입력해주세요.")
+        except EOFError:
+            print("\n파일 선택 메뉴 오류: 입력이 종료되었습니다.")
+            # 비대화형 환경에서는 첫 번째 파일 자동 선택
+            if len(data_files) > 0:
+                selected_file = data_files[0]
+                print(f"✅ 자동 선택된 파일: {Path(selected_file).name}")
+                return selected_file
+            return None
         except KeyboardInterrupt:
             print("\n파일 선택이 취소되었습니다.")
             return None
         except Exception as e:
-            logger.error(f"파일 선택 메뉴 오류: {e}")
-            print("❌ 오류가 발생했습니다. 다시 시도해주세요.")
+            print(f"파일 선택 메뉴 오류: {e}")
+            
+        attempt += 1
+    
+    # 최대 시도 횟수 초과 시 첫 번째 파일 자동 선택
+    print(f"❌ {max_attempts}번 시도했지만 선택에 실패했습니다.")
+    if len(data_files) > 0:
+        selected_file = data_files[0]
+        print(f"✅ 자동으로 첫 번째 파일을 선택합니다: {Path(selected_file).name}")
+        return selected_file
+    
+    return None
 
 def print_analysis_guide():
     """
@@ -193,6 +287,17 @@ def get_user_input(prompt: str, input_type: str = "text",
     Returns:
         Optional[str]: 사용자 입력 (취소시 None)
     """
+    # 비대화형 모드에서는 기본값 반환
+    if os.getenv('NON_INTERACTIVE') == 'true':
+        if input_type == "number":
+            return "1"  # 기본값으로 1 반환
+        elif input_type == "yes_no":
+            return "yes"  # 기본값으로 yes 반환
+        elif valid_options:
+            return valid_options[0]  # 첫 번째 옵션 반환
+        else:
+            return "성별에 따른 만족도 평균 차이를 분석해줘"  # 기본 분석 요청
+    
     try:
         while True:
             user_input = input(f"{prompt}: ").strip()

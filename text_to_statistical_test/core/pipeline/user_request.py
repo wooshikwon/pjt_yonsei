@@ -1,607 +1,474 @@
 """
 User Request Pipeline
 
-2단계: 사용자의 자연어 요청 및 목표 정의 (Multi-turn)
-사용자가 자연어로 분석 목표와 궁금증을 전달하고,
-시스템이 대화형으로 추가 질문을 통해 분석의 범위와 구체적인 목표를 명확히 합니다.
+2단계: LLM Agent 기반 사용자 요청 분석 및 목표 정의
+LLM Agent가 사용자의 자연어 질문과 데이터를 함께 분석하여
+유연하고 지능적으로 분석 목표를 설정합니다.
 """
 
 import logging
 from typing import Dict, Any, Optional, List
-import re
+import json
+import pandas as pd
 
 from .base_pipeline_step import BasePipelineStep, PipelineStepRegistry
-from utils.ui_helpers import print_analysis_guide
+from services.llm.llm_client import LLMClient
+from services.llm.prompt_engine import PromptEngine
+from core.agent.autonomous_agent import AutonomousAgent
+from utils.ui_helpers import get_user_input
+from utils.data_loader import DataLoader
 
 
 class UserRequestStep(BasePipelineStep):
-    """2단계: 사용자의 자연어 요청 및 목표 정의 (Multi-turn)"""
+    """2단계: LLM Agent 기반 사용자 요청 분석 및 목표 정의"""
     
     def __init__(self):
         """UserRequestStep 초기화"""
-        super().__init__("사용자의 자연어 요청 및 목표 정의", 2)
-        self.min_request_length = 5
-        self.max_request_length = 1000
-        self.conversation_history = []
-        self.clarification_questions = []
-    
-    def validate_input(self, input_data: Dict[str, Any]) -> bool:
-        """
-        입력 데이터 유효성 검증
+        super().__init__("LLM Agent 기반 사용자 요청 분석", 2)
+        self.llm_client = LLMClient()
+        self.prompt_engine = PromptEngine()
+        self.agent = AutonomousAgent(agent_id="request_analyst")
+        self.data_loader = DataLoader()
         
-        Args:
-            input_data: 입력 데이터 (1단계에서 전달받은 데이터)
-            
-        Returns:
-            bool: 유효성 검증 결과
-        """
+    def validate_input(self, input_data: Dict[str, Any]) -> bool:
+        """입력 데이터 유효성 검증"""
         required_fields = ['selected_file', 'file_info']
         return all(field in input_data for field in required_fields)
     
     def get_expected_output_schema(self) -> Dict[str, Any]:
-        """
-        예상 출력 스키마 반환
-        
-        Returns:
-            Dict[str, Any]: 출력 데이터 스키마
-        """
+        """예상 출력 스키마 반환"""
         return {
             'user_request': str,
-            'refined_objectives': list,
-            'analysis_scope': dict,
-            'conversation_history': list,
-            'request_metadata': {
-                'analysis_type': str,
-                'target_variables': list,
-                'group_variables': list,
-                'specific_tests': list,
-                'complexity_level': str
-            },
-            'clarification_completed': bool
+            'analysis_objectives': dict,
+            'agent_analysis': dict,
+            'data_understanding': dict,
+            'analysis_plan': dict,
+            'confidence_level': str
         }
     
     def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        사용자 자연어 요청 파이프라인 실행
-        
-        Args:
-            input_data: 파이프라인 실행 컨텍스트
-                - selected_file: 선택된 파일 경로
-                - file_info: 파일 정보
-                - user_request (optional): 직접 제공된 사용자 요청
-                - interactive (optional): 대화형 모드 여부 (기본값: True)
-                - max_clarifications (optional): 최대 명확화 질문 수 (기본값: 3)
-            
-        Returns:
-            Dict: 실행 결과
-        """
-        self.logger.info("2단계: 사용자의 자연어 요청 및 목표 정의 시작")
+        """LLM Agent 기반 사용자 요청 분석 실행"""
+        self.logger.info("LLM Agent 기반 사용자 요청 분석 시작")
         
         try:
-            # 대화 히스토리 초기화
-            self.conversation_history = []
-            self.clarification_questions = []
+            # 사용자 요청 수집
+            user_request = self._get_user_request()
+            if not user_request:
+                return {
+                    'error': True,
+                    'error_message': '사용자 요청이 제공되지 않았습니다.'
+                }
             
-            # 직접 요청이 제공된 경우
-            if 'user_request' in input_data and input_data['user_request']:
-                initial_request = input_data['user_request']
-                self.conversation_history.append({
-                    'type': 'user_input',
-                    'content': initial_request,
-                    'timestamp': self._get_timestamp()
-                })
-            else:
-                # 대화형 요청 입력
-                interactive = input_data.get('interactive', True)
-                if interactive:
-                    initial_request = self._get_initial_request_interactive(input_data)
-                    if not initial_request:
-                        return {
-                            'error': True,
-                            'error_message': '자연어 요청 입력이 취소되었습니다.',
-                            'cancelled': True
-                        }
-                else:
-                    return {
-                        'error': True,
-                        'error_message': '사용자 요청이 제공되지 않았습니다.',
-                        'error_type': 'missing_request'
-                    }
+            # 데이터 로딩 및 기본 이해
+            data_info = self._load_and_understand_data(input_data)
+            if data_info.get('error'):
+                return data_info
             
-            # 특수 명령어 처리
-            special_action = self._handle_special_commands(initial_request)
-            if special_action:
-                return special_action
+            # LLM Agent를 통한 통합 분석
+            agent_analysis = self._analyze_with_llm_agent(user_request, data_info, input_data)
             
-            # 초기 요청 검증 및 정제
-            validation_result = self._validate_and_process_request(initial_request)
-            if validation_result.get('error'):
-                return validation_result
+            # 분석 계획 생성
+            analysis_plan = self._generate_analysis_plan(agent_analysis, data_info)
             
-            # Multi-turn 대화를 통한 목표 명확화
-            max_clarifications = input_data.get('max_clarifications', 3)
-            clarification_result = self._conduct_clarification_dialogue(
-                initial_request, input_data, max_clarifications
-            )
-            
-            # 최종 분석 목표 및 범위 정리
-            final_objectives = self._finalize_analysis_objectives(
-                initial_request, clarification_result
-            )
-            
-            self.logger.info(f"사용자 요청 및 목표 정의 완료")
+            self.logger.info("LLM Agent 기반 분석 완료")
             
             return {
-                'user_request': initial_request,
-                'refined_objectives': final_objectives['objectives'],
-                'analysis_scope': final_objectives['scope'],
-                'conversation_history': self.conversation_history,
-                'request_metadata': final_objectives['metadata'],
-                'clarification_completed': True,
-                'success_message': f"📝 분석 목표가 명확히 정의되었습니다."
+                'success': True,
+                'user_request': user_request,
+                'analysis_objectives': agent_analysis.get('objectives', {}),
+                'agent_analysis': agent_analysis,
+                'data_understanding': data_info,
+                'analysis_plan': analysis_plan,
+                'confidence_level': agent_analysis.get('confidence', 'medium'),
+                'step_info': self.get_step_info()
             }
-                
+            
         except Exception as e:
-            self.logger.error(f"사용자 요청 파이프라인 오류: {e}")
+            self.logger.error(f"LLM Agent 분석 중 오류: {e}")
             return {
                 'error': True,
-                'error_message': str(e)
+                'error_message': f'분석 중 오류가 발생했습니다: {str(e)}',
+                'error_type': 'agent_analysis_error'
             }
     
-    def _get_initial_request_interactive(self, input_data: Dict[str, Any]) -> Optional[str]:
-        """대화형 초기 요청 입력"""
+    def _get_user_request(self) -> Optional[str]:
+        """사용자 요청 입력 받기"""
+        print("\n" + "="*60)
+        print("📝 분석하고 싶은 내용을 자연어로 설명해주세요")
+        print("="*60)
+        print("예시:")
+        print("• 성별에 따른 만족도 평균 차이를 분석해줘")
+        print("• 나이와 소득의 상관관계를 알고 싶어")
+        print("• 교육수준별로 연봉 차이가 있는지 확인해줘")
+        print("• 지역별 매출 분포를 비교 분석해줘")
+        print("-"*60)
+        
+        user_request = get_user_input(
+            "분석 요청을 입력해주세요: ",
+            input_type="text"
+        )
+        
+        if user_request and len(user_request.strip()) > 5:
+            return user_request.strip()
+        else:
+            print("❌ 분석 요청이 너무 짧습니다. 최소 5글자 이상 입력해주세요.")
+            return None
+    
+    def _load_and_understand_data(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """데이터 로딩 및 기본 이해"""
         try:
-            # 사용자에게 가이드 표시
-            self._display_request_guide(input_data)
+            file_path = input_data['selected_file']
             
-            user_request = input("\n📝 분석 요청: ").strip()
+            # 데이터 로딩
+            data, metadata = self.data_loader.load_file(file_path)
+            if data is None:
+                return {
+                    'error': True,
+                    'error_message': f'데이터 로딩 실패: {metadata.get("error", "Unknown error")}'
+                }
             
-            if user_request:
-                self.conversation_history.append({
-                    'type': 'user_input',
-                    'content': user_request,
-                    'timestamp': self._get_timestamp()
-                })
+            # 데이터 기본 정보 수집
+            data_info = {
+                'file_path': file_path,
+                'shape': data.shape,
+                'columns': list(data.columns),
+                'dtypes': {col: str(dtype) for col, dtype in data.dtypes.items()},
+                'sample_data': data.head(3).to_dict('records'),
+                'missing_info': {col: int(data[col].isnull().sum()) for col in data.columns},
+                'numerical_columns': list(data.select_dtypes(include=['number']).columns),
+                'categorical_columns': list(data.select_dtypes(include=['object', 'category']).columns),
+                'data_object': data  # 다음 단계에서 사용할 데이터 객체
+            }
             
-            return user_request if user_request else None
+            return data_info
             
-        except KeyboardInterrupt:
-            self.logger.info("사용자가 요청 입력을 취소했습니다.")
-            return None
         except Exception as e:
-            self.logger.error(f"대화형 요청 입력 오류: {e}")
-            return None
+            self.logger.error(f"데이터 로딩 및 이해 오류: {e}")
+            return {
+                'error': True,
+                'error_message': f'데이터 처리 중 오류: {str(e)}'
+            }
     
-    def _display_request_guide(self, input_data: Dict[str, Any]) -> None:
-        """사용자에게 요청 가이드 표시"""
-        print_analysis_guide()
-        
-        selected_file = input_data.get('selected_file', '')
-        file_name = selected_file.split('/')[-1] if selected_file else 'Unknown'
-        
-        # 파일 정보 표시
-        file_info = input_data.get('file_info', {})
-        if file_info:
-            print(f"\n📂 선택된 데이터: {file_name}")
-            print(f"   • 행 수: {file_info.get('row_count', 'N/A'):,}")
-            print(f"   • 열 수: {file_info.get('column_count', 'N/A')}")
-            print(f"   • 주요 변수: {', '.join(file_info.get('columns', [])[:5])}")
-            if len(file_info.get('columns', [])) > 5:
-                print(f"     ... 외 {len(file_info.get('columns', [])) - 5}개")
-        
-        print("\n💬 분석하고 싶은 내용을 자연어로 말씀해주세요:")
-        print("   예시:")
-        print("   • '그룹별 평균 차이를 분석해주세요'")
-        print("   • '변수들 간의 상관관계를 알고 싶어요'")
-        print("   • '회귀분석을 통해 예측모델을 만들어주세요'")
-        print("   • '범주형 변수들의 연관성을 확인해주세요'")
+    def _analyze_with_llm_agent(self, user_request: str, data_info: Dict[str, Any], 
+                               input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """LLM Agent를 통한 통합 분석"""
+        try:
+            # 데이터 컨텍스트 구성
+            data_context = self._build_data_context(data_info)
+            
+            # LLM Agent 분석 프롬프트 생성
+            analysis_prompt = self._create_agent_analysis_prompt(user_request, data_context)
+            
+            # LLM Agent 실행
+            response = self.llm_client.generate_response(
+                analysis_prompt,
+                max_tokens=1500,
+                temperature=0.3
+            )
+            
+            # 응답 파싱
+            agent_analysis = self._parse_agent_response(response.content)
+            
+            # 응답 검증 및 보완
+            validated_analysis = self._validate_and_enhance_analysis(
+                agent_analysis, user_request, data_info
+            )
+            
+            return validated_analysis
+            
+        except Exception as e:
+            self.logger.error(f"LLM Agent 분석 오류: {e}")
+            # 백업 분석 실행
+            return self._fallback_analysis(user_request, data_info)
     
-    def _conduct_clarification_dialogue(self, initial_request: str, input_data: Dict[str, Any], max_clarifications: int) -> Dict[str, Any]:
-        """Multi-turn 대화를 통한 목표 명확화"""
-        clarification_count = 0
-        current_understanding = self._analyze_initial_request(initial_request, input_data)
+    def _build_data_context(self, data_info: Dict[str, Any]) -> str:
+        """데이터 컨텍스트 구성"""
+        context_parts = []
         
-        while clarification_count < max_clarifications:
-            # 명확화가 필요한 부분 식별
-            questions = self._generate_clarification_questions(current_understanding, input_data)
+        # 기본 정보
+        context_parts.append(f"데이터 크기: {data_info['shape'][0]}행 × {data_info['shape'][1]}열")
+        
+        # 컬럼 정보
+        context_parts.append("컬럼 정보:")
+        for col in data_info['columns']:
+            dtype = data_info['dtypes'][col]
+            missing = data_info['missing_info'][col]
+            missing_pct = round((missing / data_info['shape'][0]) * 100, 1)
             
-            if not questions:
-                # 더 이상 명확화할 것이 없음
-                break
+            context_parts.append(f"  - {col} ({dtype}): 결측치 {missing}개 ({missing_pct}%)")
+        
+        # 샘플 데이터
+        context_parts.append("\n샘플 데이터 (처음 3행):")
+        for i, row in enumerate(data_info['sample_data'], 1):
+            row_str = ", ".join([f"{k}={v}" for k, v in row.items()][:5])  # 처음 5개 컬럼만
+            context_parts.append(f"  {i}. {row_str}")
+        
+        # 변수 타입 요약
+        num_cols = len(data_info['numerical_columns'])
+        cat_cols = len(data_info['categorical_columns'])
+        context_parts.append(f"\n변수 유형: 수치형 {num_cols}개, 범주형 {cat_cols}개")
+        
+        return "\n".join(context_parts)
+    
+    def _create_agent_analysis_prompt(self, user_request: str, data_context: str) -> str:
+        """LLM Agent 분석용 프롬프트 생성"""
+        prompt = f"""
+당신은 데이터 분석 전문가입니다. 사용자의 자연어 요청과 데이터 정보를 분석하여 최적의 통계 분석 방법을 제안해주세요.
+
+## 사용자 요청
+"{user_request}"
+
+## 데이터 정보
+{data_context}
+
+## 분석 과제
+사용자의 요청을 분석하여 다음을 결정해주세요:
+
+1. 사용자가 원하는 분석의 핵심 목적
+2. 분석에 필요한 변수들 (영어 컬럼명과 한글 요청 간 매칭 포함)
+3. 적절한 통계 분석 방법
+4. 분석 과정에서 고려해야 할 사항들
+
+## 응답 형식 (JSON)
+다음 형식으로 정확히 응답해주세요:
+
+```json
+{{
+    "objectives": {{
+        "main_goal": "분석의 주요 목적",
+        "specific_questions": ["구체적인 분석 질문들"],
+        "analysis_type": "group_comparison|correlation|regression|descriptive|categorical"
+    }},
+    "variables": {{
+        "target_variables": ["종속변수/분석대상 컬럼명들"],
+        "predictor_variables": ["독립변수/그룹변수 컬럼명들"],
+        "variable_matching": {{
+            "사용자언급단어": "실제컬럼명"
+        }}
+    }},
+    "analysis_methods": {{
+        "primary_method": "주요 분석 방법",
+        "alternative_methods": ["대안 분석 방법들"],
+        "preprocessing_needed": ["필요한 전처리 단계들"]
+    }},
+    "considerations": {{
+        "data_quality_issues": ["데이터 품질 이슈들"],
+        "statistical_assumptions": ["확인해야 할 통계적 가정들"],
+        "potential_challenges": ["예상되는 분석 어려움들"]
+    }},
+    "confidence": "high|medium|low",
+    "reasoning": "분석 판단의 근거"
+}}
+```
+
+중요: 사용자가 한글로 언급한 개념들을 데이터의 실제 영어 컬럼명과 지능적으로 매칭하세요.
+예: "성별" → "gender", "만족도" → "satisfaction", "나이" → "age"
+"""
+        
+        return prompt
+    
+    def _parse_agent_response(self, response_content: str) -> Dict[str, Any]:
+        """LLM Agent 응답 파싱"""
+        try:
+            # JSON 블록 추출
+            json_start = response_content.find('```json')
+            json_end = response_content.find('```', json_start + 7)
             
-            # 가장 중요한 질문 선택
-            primary_question = questions[0]
-            
-            # 대화형 모드에서만 질문
-            if input_data.get('interactive', True):
-                print(f"\n🤔 {primary_question['question']}")
-                if primary_question.get('options'):
-                    for i, option in enumerate(primary_question['options'], 1):
-                        print(f"   {i}. {option}")
-                
-                try:
-                    user_response = input("👤 답변: ").strip()
-                    if not user_response:
-                        break
-                    
-                    self.conversation_history.append({
-                        'type': 'system_question',
-                        'content': primary_question['question'],
-                        'timestamp': self._get_timestamp()
-                    })
-                    self.conversation_history.append({
-                        'type': 'user_response',
-                        'content': user_response,
-                        'timestamp': self._get_timestamp()
-                    })
-                    
-                    # 답변을 바탕으로 이해도 업데이트
-                    current_understanding = self._update_understanding(
-                        current_understanding, primary_question, user_response
-                    )
-                    
-                except KeyboardInterrupt:
-                    print("\n명확화 대화를 종료합니다.")
-                    break
+            if json_start != -1 and json_end != -1:
+                json_str = response_content[json_start + 7:json_end].strip()
             else:
-                # 비대화형 모드에서는 기본값 사용
-                break
+                # JSON 블록이 없으면 전체 응답에서 JSON 찾기
+                json_str = response_content.strip()
             
-            clarification_count += 1
-        
-        return {
-            'final_understanding': current_understanding,
-            'clarification_count': clarification_count,
-            'questions_asked': self.clarification_questions
-        }
+            # JSON 파싱
+            parsed_response = json.loads(json_str)
+            return parsed_response
+            
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"JSON 파싱 실패: {e}")
+            # 기본 구조 반환
+            return {
+                "objectives": {
+                    "main_goal": "데이터 분석",
+                    "analysis_type": "descriptive"
+                },
+                "variables": {
+                    "target_variables": [],
+                    "predictor_variables": []
+                },
+                "confidence": "low",
+                "reasoning": "JSON 파싱 실패로 기본 분석 적용"
+            }
     
-    def _analyze_initial_request(self, request: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """초기 요청 분석"""
-        analysis = {
-            'analysis_type': self._detect_analysis_type(request),
-            'target_variables': self._extract_mentioned_variables(request, input_data),
-            'group_variables': self._extract_group_variables(request, input_data),
-            'specific_tests': self._extract_specific_tests(request),
-            'uncertainty_areas': [],
-            'confidence_level': 'medium'
+    def _validate_and_enhance_analysis(self, analysis: Dict[str, Any], 
+                                     user_request: str, data_info: Dict[str, Any]) -> Dict[str, Any]:
+        """분석 결과 검증 및 보완"""
+        validated = analysis.copy()
+        
+        # 기본 구조 확인
+        if 'objectives' not in validated:
+            validated['objectives'] = {}
+        if 'variables' not in validated:
+            validated['variables'] = {}
+        if 'analysis_methods' not in validated:
+            validated['analysis_methods'] = {}
+        
+        # 변수명 검증 및 매칭
+        available_columns = data_info['columns']
+        
+        # target_variables 검증
+        target_vars = validated['variables'].get('target_variables', [])
+        validated_targets = [var for var in target_vars if var in available_columns]
+        
+        # predictor_variables 검증
+        predictor_vars = validated['variables'].get('predictor_variables', [])
+        validated_predictors = [var for var in predictor_vars if var in available_columns]
+        
+        # 변수가 없으면 추론 시도
+        if not validated_targets and not validated_predictors:
+            inferred_vars = self._infer_variables_from_request(user_request, available_columns)
+            validated_targets.extend(inferred_vars.get('targets', []))
+            validated_predictors.extend(inferred_vars.get('predictors', []))
+        
+        validated['variables']['target_variables'] = validated_targets
+        validated['variables']['predictor_variables'] = validated_predictors
+        
+        # 신뢰도 조정
+        if not validated_targets and not validated_predictors:
+            validated['confidence'] = 'low'
+        elif validated.get('confidence') not in ['high', 'medium', 'low']:
+            validated['confidence'] = 'medium'
+        
+        return validated
+    
+    def _infer_variables_from_request(self, user_request: str, 
+                                    available_columns: List[str]) -> Dict[str, List[str]]:
+        """요청에서 변수 추론"""
+        request_lower = user_request.lower()
+        
+        # 한글-영어 매칭 사전
+        common_mappings = {
+            '성별': ['gender', 'sex'],
+            '나이': ['age'],
+            '만족도': ['satisfaction', 'rating', 'score'],
+            '소득': ['income', 'salary', 'wage'],
+            '연봉': ['salary', 'income', 'wage'],
+            '교육': ['education', 'degree'],
+            '지역': ['region', 'area', 'location'],
+            '매출': ['sales', 'revenue'],
+            '가격': ['price', 'cost'],
+            '수량': ['quantity', 'amount']
         }
         
-        # 불확실한 영역 식별
-        if not analysis['target_variables']:
-            analysis['uncertainty_areas'].append('target_variables')
-        if analysis['analysis_type'] == 'group_comparison' and not analysis['group_variables']:
-            analysis['uncertainty_areas'].append('group_variables')
-        if analysis['analysis_type'] == 'unknown':
-            analysis['uncertainty_areas'].append('analysis_type')
+        targets = []
+        predictors = []
+        
+        for korean_term, english_terms in common_mappings.items():
+            if korean_term in request_lower:
+                for eng_term in english_terms:
+                    matching_cols = [col for col in available_columns 
+                                   if eng_term.lower() in col.lower()]
+                    if matching_cols:
+                        # 비교/차이 분석의 경우
+                        if any(word in request_lower for word in ['차이', '비교', '따른']):
+                            if korean_term in ['성별', '지역', '교육']:
+                                predictors.extend(matching_cols)
+                            else:
+                                targets.extend(matching_cols)
+                        else:
+                            targets.extend(matching_cols)
+        
+        return {'targets': list(set(targets)), 'predictors': list(set(predictors))}
+    
+    def _fallback_analysis(self, user_request: str, data_info: Dict[str, Any]) -> Dict[str, Any]:
+        """백업 분석 (LLM 실패 시)"""
+        self.logger.info("백업 분석 실행")
+        
+        # 기본 구조 생성
+        analysis = {
+            "objectives": {
+                "main_goal": "데이터 탐색적 분석",
+                "specific_questions": ["데이터의 기본 특성 파악"],
+                "analysis_type": "descriptive"
+            },
+            "variables": {
+                "target_variables": data_info['numerical_columns'][:2],  # 처음 2개 수치형 변수
+                "predictor_variables": data_info['categorical_columns'][:2],  # 처음 2개 범주형 변수
+            },
+            "analysis_methods": {
+                "primary_method": "기술통계분석",
+                "alternative_methods": ["데이터 시각화"],
+                "preprocessing_needed": ["결측치 확인"]
+            },
+            "confidence": "low",
+            "reasoning": "LLM 분석 실패로 기본 탐색적 분석 적용"
+        }
         
         return analysis
     
-    def _generate_clarification_questions(self, understanding: Dict[str, Any], input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """명확화 질문 생성"""
-        questions = []
-        file_info = input_data.get('file_info', {})
-        available_columns = file_info.get('columns', [])
+    def _generate_analysis_plan(self, agent_analysis: Dict[str, Any], 
+                              data_info: Dict[str, Any]) -> Dict[str, Any]:
+        """분석 계획 생성"""
+        plan = {
+            'analysis_steps': [],
+            'expected_outputs': [],
+            'estimated_duration': 'medium',
+            'complexity_level': agent_analysis.get('confidence', 'medium')
+        }
         
-        # 분석 유형이 불명확한 경우
-        if 'analysis_type' in understanding['uncertainty_areas']:
-            questions.append({
-                'type': 'analysis_type',
-                'question': '어떤 종류의 분석을 원하시나요?',
-                'options': [
-                    '그룹 간 비교 (평균, 비율 차이 등)',
-                    '변수 간 관계 분석 (상관관계, 회귀분석)',
-                    '범주형 데이터 연관성 분석',
-                    '기술 통계 (요약, 분포 등)'
-                ]
-            })
+        # 분석 유형에 따른 계획 생성
+        analysis_type = agent_analysis.get('objectives', {}).get('analysis_type', 'descriptive')
         
-        # 타겟 변수가 불명확한 경우
-        if 'target_variables' in understanding['uncertainty_areas'] and available_columns:
-            questions.append({
-                'type': 'target_variables',
-                'question': '주요 분석 대상이 되는 변수는 무엇인가요?',
-                'options': available_columns[:10]  # 최대 10개까지만 표시
-            })
+        if analysis_type == 'group_comparison':
+            plan['analysis_steps'] = [
+                '기술통계 계산',
+                '정규성 검정',
+                '그룹간 비교 검정 (t-test/ANOVA)',
+                '결과 해석 및 시각화'
+            ]
+        elif analysis_type == 'correlation':
+            plan['analysis_steps'] = [
+                '기술통계 계산',
+                '상관관계 분석',
+                '산점도 시각화',
+                '결과 해석'
+            ]
+        elif analysis_type == 'regression':
+            plan['analysis_steps'] = [
+                '기술통계 계산',
+                '회귀분석 가정 검토',
+                '회귀모델 수행',
+                '모델 평가 및 해석'
+            ]
+        else:  # descriptive
+            plan['analysis_steps'] = [
+                '기술통계 계산',
+                '데이터 분포 확인',
+                '시각화 생성',
+                '기본 패턴 분석'
+            ]
         
-        # 그룹 변수가 불명확한 경우
-        if 'group_variables' in understanding['uncertainty_areas'] and available_columns:
-            questions.append({
-                'type': 'group_variables',
-                'question': '그룹을 나누는 기준이 되는 변수는 무엇인가요?',
-                'options': available_columns[:10]
-            })
-        
-        return questions
-    
-    def _update_understanding(self, understanding: Dict[str, Any], question: Dict[str, Any], response: str) -> Dict[str, Any]:
-        """사용자 답변을 바탕으로 이해도 업데이트"""
-        question_type = question['type']
-        
-        if question_type == 'analysis_type':
-            if '1' in response or '그룹' in response or '비교' in response:
-                understanding['analysis_type'] = 'group_comparison'
-            elif '2' in response or '관계' in response or '회귀' in response:
-                understanding['analysis_type'] = 'relationship'
-            elif '3' in response or '범주' in response or '연관' in response:
-                understanding['analysis_type'] = 'categorical'
-            elif '4' in response or '기술' in response or '요약' in response:
-                understanding['analysis_type'] = 'descriptive'
-            
-            if 'analysis_type' in understanding['uncertainty_areas']:
-                understanding['uncertainty_areas'].remove('analysis_type')
-        
-        elif question_type == 'target_variables':
-            # 변수명 추출 로직
-            mentioned_vars = [var for var in question.get('options', []) if var.lower() in response.lower()]
-            if mentioned_vars:
-                understanding['target_variables'] = mentioned_vars
-                if 'target_variables' in understanding['uncertainty_areas']:
-                    understanding['uncertainty_areas'].remove('target_variables')
-        
-        elif question_type == 'group_variables':
-            mentioned_vars = [var for var in question.get('options', []) if var.lower() in response.lower()]
-            if mentioned_vars:
-                understanding['group_variables'] = mentioned_vars
-                if 'group_variables' in understanding['uncertainty_areas']:
-                    understanding['uncertainty_areas'].remove('group_variables')
-        
-        return understanding
-    
-    def _finalize_analysis_objectives(self, initial_request: str, clarification_result: Dict[str, Any]) -> Dict[str, Any]:
-        """최종 분석 목표 및 범위 정리"""
-        understanding = clarification_result['final_understanding']
-        
-        objectives = [
-            f"분석 유형: {self._get_analysis_type_description(understanding['analysis_type'])}"
+        plan['expected_outputs'] = [
+            '통계 검정 결과',
+            '시각화 차트',
+            '분석 해석 보고서'
         ]
         
-        if understanding['target_variables']:
-            objectives.append(f"주요 분석 변수: {', '.join(understanding['target_variables'])}")
-        
-        if understanding['group_variables']:
-            objectives.append(f"그룹 변수: {', '.join(understanding['group_variables'])}")
-        
-        if understanding['specific_tests']:
-            objectives.append(f"특정 통계 기법: {', '.join(understanding['specific_tests'])}")
-        
-        scope = {
-            'analysis_complexity': self._determine_complexity_level(understanding),
-            'estimated_steps': self._estimate_analysis_steps(understanding),
-            'data_requirements': self._identify_data_requirements(understanding)
-        }
-        
-        metadata = {
-            'analysis_type': understanding['analysis_type'],
-            'target_variables': understanding['target_variables'],
-            'group_variables': understanding['group_variables'],
-            'specific_tests': understanding['specific_tests'],
-            'complexity_level': scope['analysis_complexity'],
-            'clarification_count': clarification_result['clarification_count']
-        }
-        
-        return {
-            'objectives': objectives,
-            'scope': scope,
-            'metadata': metadata
-        }
-    
-    def _handle_special_commands(self, user_request: str) -> Optional[Dict[str, Any]]:
-        """특수 명령어 처리"""
-        request_lower = user_request.lower().strip()
-        
-        # 종료 명령어
-        if request_lower in ['quit', 'exit', '종료', 'q']:
-            return {
-                'action': 'quit',
-                'success_message': '분석을 종료합니다.'
-            }
-        
-        # 새 파일 선택
-        elif request_lower in ['new', '새파일', 'new file']:
-            return {
-                'action': 'new_file',
-                'success_message': '새로운 데이터 파일을 선택합니다.'
-            }
-        
-        # 상태 확인
-        elif request_lower in ['status', '상태', 'help', '도움말']:
-            return {
-                'action': 'show_status',
-                'success_message': '현재 상태를 확인합니다.'
-            }
-        
-        return None
-    
-    def _validate_and_process_request(self, user_request: str) -> Dict[str, Any]:
-        """자연어 요청 검증 및 정제"""
-        # 기본 검증
-        if not user_request or not user_request.strip():
-            return {
-                'error': True,
-                'error_message': '분석 요청을 입력해주세요.',
-                'error_type': 'empty_request'
-            }
-        
-        # 길이 검증
-        if len(user_request) < self.min_request_length:
-            return {
-                'error': True,
-                'error_message': f'요청이 너무 짧습니다. 최소 {self.min_request_length}자 이상 입력해주세요.',
-                'error_type': 'too_short'
-            }
-        
-        if len(user_request) > self.max_request_length:
-            return {
-                'error': True,
-                'error_message': f'요청이 너무 깁니다. 최대 {self.max_request_length}자 이하로 입력해주세요.',
-                'error_type': 'too_long'
-            }
-        
-        # 무의미한 요청 검증
-        if self._is_meaningless_request(user_request):
-            return {
-                'error': True,
-                'error_message': '구체적인 분석 요청을 입력해주세요.',
-                'error_type': 'meaningless_request'
-            }
-        
-        return {'processed_request': user_request.strip()}
-    
-    def _detect_analysis_type(self, request: str) -> str:
-        """요청에서 분석 유형 감지"""
-        request_lower = request.lower()
-        
-        # 그룹 비교 키워드
-        group_keywords = ['그룹', '비교', '차이', '평균', 't-test', 'anova', '집단']
-        if any(keyword in request_lower for keyword in group_keywords):
-            return 'group_comparison'
-        
-        # 관계 분석 키워드
-        relationship_keywords = ['상관', '관계', '회귀', '예측', 'correlation', 'regression']
-        if any(keyword in request_lower for keyword in relationship_keywords):
-            return 'relationship'
-        
-        # 범주형 분석 키워드
-        categorical_keywords = ['범주', '카이제곱', '연관성', 'chi-square', '독립성']
-        if any(keyword in request_lower for keyword in categorical_keywords):
-            return 'categorical'
-        
-        # 기술 통계 키워드
-        descriptive_keywords = ['요약', '분포', '기술통계', '평균', '표준편차']
-        if any(keyword in request_lower for keyword in descriptive_keywords):
-            return 'descriptive'
-        
-        return 'unknown'
-    
-    def _extract_mentioned_variables(self, request: str, input_data: Dict[str, Any]) -> List[str]:
-        """요청에서 언급된 변수명 추출"""
-        file_info = input_data.get('file_info', {})
-        available_columns = file_info.get('columns', [])
-        
-        mentioned_vars = []
-        for col in available_columns:
-            if col.lower() in request.lower():
-                mentioned_vars.append(col)
-        
-        return mentioned_vars
-    
-    def _extract_group_variables(self, request: str, input_data: Dict[str, Any]) -> List[str]:
-        """그룹 변수 추출"""
-        # 그룹 관련 키워드 근처의 변수명 찾기
-        group_keywords = ['그룹별', '집단별', '카테고리별', '유형별']
-        # 구현 단순화 - 실제로는 더 정교한 NLP 처리 필요
-        return []
-    
-    def _extract_specific_tests(self, request: str) -> List[str]:
-        """특정 통계 기법 추출"""
-        test_keywords = {
-            't-test': ['t-test', 'ttest', 't검정'],
-            'anova': ['anova', '분산분석', '일원분산분석'],
-            'regression': ['regression', '회귀분석', '선형회귀'],
-            'correlation': ['correlation', '상관분석', '피어슨'],
-            'chi-square': ['chi-square', '카이제곱', 'chi2']
-        }
-        
-        mentioned_tests = []
-        request_lower = request.lower()
-        
-        for test_name, keywords in test_keywords.items():
-            if any(keyword in request_lower for keyword in keywords):
-                mentioned_tests.append(test_name)
-        
-        return mentioned_tests
-    
-    def _is_meaningless_request(self, request: str) -> bool:
-        """무의미한 요청인지 확인"""
-        meaningless_patterns = [
-            r'^[a-zA-Z\s]*$',  # 영문자와 공백만
-            r'^[0-9\s]*$',     # 숫자와 공백만
-            r'^[!@#$%^&*()_+\-=\[\]{};:\'",.<>/?`~\s]*$'  # 특수문자와 공백만
-        ]
-        
-        request_clean = request.strip()
-        
-        for pattern in meaningless_patterns:
-            if re.match(pattern, request_clean):
-                return True
-        
-        # 너무 반복적인 문자
-        if len(set(request_clean.replace(' ', ''))) < 3:
-            return True
-        
-        return False
-    
-    def _get_analysis_type_description(self, analysis_type: str) -> str:
-        """분석 유형 설명 반환"""
-        descriptions = {
-            'group_comparison': '그룹 간 비교 분석',
-            'relationship': '변수 간 관계 분석',
-            'categorical': '범주형 데이터 연관성 분석',
-            'descriptive': '기술 통계 분석',
-            'unknown': '일반적인 데이터 분석'
-        }
-        return descriptions.get(analysis_type, '사용자 정의 분석')
-    
-    def _determine_complexity_level(self, understanding: Dict[str, Any]) -> str:
-        """분석 복잡도 수준 결정"""
-        complexity_score = 0
-        
-        if understanding['target_variables']:
-            complexity_score += len(understanding['target_variables'])
-        if understanding['group_variables']:
-            complexity_score += len(understanding['group_variables']) * 2
-        if understanding['specific_tests']:
-            complexity_score += len(understanding['specific_tests'])
-        
-        if complexity_score <= 2:
-            return 'simple'
-        elif complexity_score <= 5:
-            return 'medium'
-        else:
-            return 'complex'
-    
-    def _estimate_analysis_steps(self, understanding: Dict[str, Any]) -> int:
-        """예상 분석 단계 수 추정"""
-        base_steps = 3  # 기본적인 전처리, 분석, 보고서
-        
-        if understanding['target_variables']:
-            base_steps += len(understanding['target_variables'])
-        if understanding['specific_tests']:
-            base_steps += len(understanding['specific_tests'])
-        
-        return min(base_steps, 10)  # 최대 10단계
-    
-    def _identify_data_requirements(self, understanding: Dict[str, Any]) -> List[str]:
-        """데이터 요구사항 식별"""
-        requirements = []
-        
-        if understanding['analysis_type'] == 'group_comparison':
-            requirements.append('그룹을 나눌 수 있는 범주형 변수')
-            requirements.append('비교할 연속형 변수')
-        elif understanding['analysis_type'] == 'relationship':
-            requirements.append('연속형 변수들 간의 관계 분석 가능')
-        elif understanding['analysis_type'] == 'categorical':
-            requirements.append('범주형 변수들')
-        
-        return requirements
-    
-    def _get_timestamp(self) -> str:
-        """현재 타임스탬프 반환"""
-        from datetime import datetime
-        return datetime.now().isoformat()
+        return plan
     
     def get_step_info(self) -> Dict[str, Any]:
-        """단계 정보 반환 (부모 클래스 메서드 확장)"""
+        """단계 정보 반환"""
         base_info = super().get_step_info()
         base_info.update({
-            'description': '사용자의 자연어 요청 및 목표 정의 (Multi-turn)',
+            'description': 'LLM Agent 기반 사용자 요청 분석',
             'input_requirements': ['selected_file', 'file_info'],
-            'output_provides': ['user_request', 'refined_objectives', 'analysis_scope', 'conversation_history', 'request_metadata'],
-            'supports_multiturn': True,
-            'max_clarifications': 3
+            'output_provides': [
+                'analysis_objectives', 'agent_analysis', 'data_understanding', 'analysis_plan'
+            ],
+            'capabilities': [
+                'LLM 기반 자연어 이해', '자동 변수 매칭', '분석 방법 추천', '분석 계획 수립'
+            ]
         })
         return base_info
 
 
-# 단계 등록
-PipelineStepRegistry.register_step(2, UserRequestStep) 

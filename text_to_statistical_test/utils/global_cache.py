@@ -143,28 +143,27 @@ class GlobalCache:
             
             return entry.value
     
-    def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> bool:
+    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """캐시에 값 저장"""
         with self._lock:
             try:
-                # 메모리 사용량 추정
-                estimated_size = self._estimate_size(value)
+                # TTL은 현재 구현에서는 무시 (향후 Redis 등으로 확장시 활용)
+                if ttl is not None:
+                    # TTL 지원을 위한 확장 가능한 구조
+                    expiry_time = time.time() + ttl
+                    self._cache[key] = CacheEntry(
+                        value=value,
+                        created_at=time.time(),
+                        ttl_seconds=ttl,
+                        size_bytes=self._estimate_size(value)
+                    )
+                else:
+                    self._cache[key] = CacheEntry(
+                        value=value,
+                        created_at=time.time(),
+                        size_bytes=self._estimate_size(value)
+                    )
                 
-                # 메모리 제한 확인
-                if self._get_current_size() + estimated_size > self._max_size_bytes:
-                    if not self._make_space(estimated_size):
-                        logger.warning(f"캐시 메모리 부족으로 키 저장 실패: {key}")
-                        return False
-                
-                # 캐시 엔트리 생성
-                entry = CacheEntry(
-                    value=value,
-                    created_at=time.time(),
-                    ttl_seconds=ttl_seconds,
-                    size_bytes=estimated_size
-                )
-                
-                self._cache[key] = entry
                 self._metrics.sets += 1
                 self._metrics.total_keys = len(self._cache)
                 

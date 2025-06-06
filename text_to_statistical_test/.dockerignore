@@ -1,6 +1,91 @@
-# Git 관련
+# Git
 .git
 .gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+output_data/
+logs/
+*.log
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Development files
+tests/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Poetry
+poetry.lock
+.poetry/
+
+# Node modules (if any)
+node_modules/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Large files
+*.csv
+*.xlsx
+*.json
+input_data/data_files/*
+!input_data/data_files/.gitkeep
 
 # Python 캐시
 __pycache__/
@@ -46,17 +131,12 @@ output_results/*.jpg
 # RAG 인덱스 (재구축 필요)
 resources/rag_index/*
 
-# OS 관련
-.DS_Store
-Thumbs.db
-
 # Docker 관련
 Dockerfile
 docker-compose.yml
 .dockerignore
 
 # 개발 도구
-.pytest_cache/
 .coverage
 htmlcov/
 
@@ -65,5 +145,4 @@ htmlcov/
 notebooks/
 
 # 문서
-README.md
-docs/ 
+README.md 

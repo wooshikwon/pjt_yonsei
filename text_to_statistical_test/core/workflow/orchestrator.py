@@ -28,6 +28,7 @@ class Orchestrator:
         Args:
             state_manager: 상태 관리자 (None이면 새로 생성)
         """
+        self.logger = logging.getLogger(__name__)
         self.state_manager = state_manager or StateManager()
         self.conversation_history = ConversationHistory()  # 대화 이력 관리자
         self.error_handler = ErrorHandler()
@@ -59,12 +60,7 @@ class Orchestrator:
                     step_class = getattr(module, class_name)
                     
                     # 단계별로 필요한 의존성 주입
-                    if step_num == 5:  # UserSelectionStep
-                        self.pipeline_steps[step_num] = step_class(
-                            conversation_history=self.conversation_history
-                        )
-                    else:
-                        self.pipeline_steps[step_num] = step_class()
+                    self.pipeline_steps[step_num] = step_class()
                     
                     logger.debug(f"단계 {step_num} 클래스 로드됨: {class_name}")
                 except Exception as e:
@@ -105,7 +101,7 @@ class Orchestrator:
             skip_stages = current_data.get('skip_stages', [])
             
             # 각 단계 순차 실행 (구현된 단계들만)
-            max_stage = min(8, max(self.pipeline_steps.keys()))
+            max_stage = min(8, max(self._step_classes.keys()) if self._step_classes else 8)
             
             for stage_num in range(start_stage, max_stage + 1):
                 if stage_num in skip_stages:
@@ -113,7 +109,7 @@ class Orchestrator:
                     continue
                 
                 # 구현되지 않은 단계는 건너뛰기
-                if stage_num not in self.pipeline_steps:
+                if stage_num not in self._step_classes:
                     logger.warning(f"단계 {stage_num}가 아직 구현되지 않았습니다. 건너뛰기")
                     continue
                 
@@ -308,7 +304,16 @@ class Orchestrator:
     
     def _prepare_next_stage_data(self, current_data: Dict[str, Any], 
                                step_result: Dict[str, Any]) -> Dict[str, Any]:
-        """다음 단계를 위한 데이터 준비"""
+        """
+        다음 단계를 위한 데이터 준비 (스키마 정규화 포함)
+        
+        Args:
+            current_data: 현재 단계 입력 데이터
+            step_result: 현재 단계 실행 결과
+            
+        Returns:
+            Dict[str, Any]: 다음 단계용 정규화된 데이터
+        """
         next_data = current_data.copy()
         
         # 단계 결과를 다음 단계 입력에 추가
@@ -316,8 +321,54 @@ class Orchestrator:
             # 메타데이터 제외하고 실제 결과만 추가
             result_data = {k: v for k, v in step_result.items() if not k.startswith('_')}
             next_data.update(result_data)
+            
+            # 필드명 정규화 (단계 간 호환성 보장)
+            next_data = self._normalize_field_names(next_data, step_result)
         
         return next_data
+    
+    def _normalize_field_names(self, data: Dict[str, Any], step_result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        단계 간 필드명 정규화
+        
+        Args:
+            data: 현재 데이터
+            step_result: 단계 실행 결과
+            
+        Returns:
+            Dict[str, Any]: 정규화된 데이터
+        """
+        normalized_data = data.copy()
+        
+        # 2단계 → 3단계 매핑
+        if 'analysis_objectives' in step_result and 'refined_objectives' not in normalized_data:
+            normalized_data['refined_objectives'] = step_result['analysis_objectives']
+            self.logger.debug("필드명 정규화: analysis_objectives → refined_objectives")
+        
+        # 3단계 → 4단계 매핑 (미래 확장용)
+        if 'data_summary' in step_result and 'summary_data' not in normalized_data:
+            normalized_data['summary_data'] = step_result['data_summary']
+            self.logger.debug("필드명 정규화: data_summary → summary_data")
+        
+        # 필수 필드 존재 여부 로깅
+        required_fields_by_step = {
+            3: ['selected_file', 'file_info', 'user_request'],
+            4: ['data_overview', 'variable_analysis'],
+            5: ['analysis_proposals'],
+            6: ['selected_analysis'],
+            7: ['analysis_plan'],
+            8: ['analysis_results']
+        }
+        
+        # 다음 단계 추정 (현재 단계 + 1)
+        next_step = max([k for k in data.keys() if str(k).isdigit()] + [0]) + 1
+        if next_step in required_fields_by_step:
+            missing_fields = [f for f in required_fields_by_step[next_step] 
+                            if f not in normalized_data]
+            if missing_fields:
+                self.logger.warning(f"다음 단계({next_step})에 필요한 필드 부족: {missing_fields}")
+        
+        return normalized_data
     
     def _should_stop_pipeline(self, stage_num: int, step_result: Dict[str, Any]) -> bool:
         """파이프라인 중단 여부 결정"""

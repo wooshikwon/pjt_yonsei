@@ -466,17 +466,151 @@ JSON 형태로 응답해주세요.
         return issues
     
     def get_statistics(self) -> Dict[str, Any]:
-        """엔진 통계 정보"""
-        categories = {}
-        for template in self.templates.values():
-            category = template.category
-            if category not in categories:
-                categories[category] = 0
-            categories[category] += 1
-        
+        """프롬프트 엔진 사용 통계"""
         return {
             'total_templates': len(self.templates),
-            'categories': categories,
-            'default_language': self.default_language,
-            'cache_enabled': self.cache_enabled
-        } 
+            'categories': list(set(t.category for t in self.templates.values())),
+            'cache_enabled': hasattr(self, 'cache') and self.cache is not None,
+            'default_language': getattr(self, 'default_language', 'ko')
+        }
+    
+    def create_analysis_proposal_prompt(self, input_data: Dict[str, Any], 
+                                      rag_context: Dict[str, Any]) -> str:
+        """분석 제안을 위한 프롬프트 생성"""
+        try:
+            # 프롬프트 컨텍스트 구성
+            context = PromptContext(
+                user_request=input_data.get('user_request', ''),
+                data_info=input_data.get('data_overview', {}),
+                analysis_type=input_data.get('analysis_recommendations', {}).get('suitable_analyses', []),
+                domain_knowledge=rag_context.get('statistical_knowledge', []),
+                constraints={
+                    'data_limitations': input_data.get('data_quality_assessment', {}).get('limitations', []),
+                    'statistical_assumptions': input_data.get('summary_insights', {}).get('statistical_considerations', [])
+                }
+            )
+            
+            # 기본 분석 제안 템플릿 사용
+            prompt = self.generate_prompt("statistical_test_proposal", context)
+            
+            return prompt
+            
+        except Exception as e:
+            logger.error(f"분석 제안 프롬프트 생성 오류: {e}")
+            return self._get_fallback_analysis_prompt(input_data)
+    
+    def create_domain_insight_prompt(self, input_data: Dict[str, Any], 
+                                   rag_context: Dict[str, Any]) -> str:
+        """도메인 인사이트를 위한 프롬프트 생성"""
+        try:
+            context = PromptContext(
+                user_request=input_data.get('user_request', ''),
+                data_info=input_data.get('data_overview', {}),
+                domain_knowledge=rag_context.get('domain_knowledge', []),
+                previous_results=input_data.get('analysis_recommendations', {}),
+                constraints={
+                    'business_context': rag_context.get('business_context', {}),
+                    'industry_standards': rag_context.get('industry_standards', [])
+                }
+            )
+            
+            # 도메인 인사이트 템플릿 생성
+            template = """
+다음 데이터 분석 상황에서 도메인별 인사이트를 제공해주세요.
+
+사용자 요청: {user_request}
+
+데이터 정보:
+{data_info}
+
+관련 도메인 지식:
+{domain_knowledge}
+
+비즈니스 컨텍스트:
+{constraints}
+
+다음을 포함하여 분석해주세요:
+
+1. 비즈니스 컨텍스트:
+   - 핵심 비즈니스 지표 식별
+   - 업계 표준 및 벤치마크
+   - 의사결정에 미치는 영향
+
+2. 유사 사례:
+   - 동일 업계 분석 사례
+   - 성공/실패 요인
+   - 적용 가능한 인사이트
+
+3. 도메인별 고려사항:
+   - 업계 특성 반영사항
+   - 규제 및 윤리적 고려사항
+   - 실무적 제약사항
+
+JSON 형태로 응답해주세요.
+"""
+            
+            # 임시 템플릿으로 프롬프트 생성
+            temp_template = PromptTemplate(
+                name="domain_insight_temp",
+                template=template,
+                variables=["user_request", "data_info", "domain_knowledge", "constraints"],
+                description="도메인 인사이트 임시 템플릿",
+                category="domain"
+            )
+            
+            return self._render_template(temp_template, self._extract_variables_from_context(context))
+            
+        except Exception as e:
+            logger.error(f"도메인 인사이트 프롬프트 생성 오류: {e}")
+            return self._get_fallback_domain_prompt(input_data)
+    
+    def _get_fallback_analysis_prompt(self, input_data: Dict[str, Any]) -> str:
+        """분석 제안 폴백 프롬프트"""
+        user_request = input_data.get('user_request', '사용자 요청 없음')
+        data_info = input_data.get('data_overview', {})
+        
+        return f"""
+다음 데이터 분석 요청에 대해 적절한 통계 분석 방법을 제안해주세요.
+
+사용자 요청: {user_request}
+
+데이터 정보:
+- 행 수: {data_info.get('row_count', '알 수 없음')}
+- 열 수: {data_info.get('column_count', '알 수 없음')}
+- 주요 변수: {', '.join(data_info.get('columns', [])[:5])}
+
+다음 형태로 응답해주세요:
+
+추천 방법:
+- 방법 1: [방법명] - [설명]
+- 방법 2: [방법명] - [설명]
+
+대안 방법:
+- 대안 1: [방법명] - [설명]
+
+근거:
+- [선택 이유]
+"""
+    
+    def _get_fallback_domain_prompt(self, input_data: Dict[str, Any]) -> str:
+        """도메인 인사이트 폴백 프롬프트"""
+        user_request = input_data.get('user_request', '사용자 요청 없음')
+        
+        return f"""
+다음 분석 요청에 대한 도메인 인사이트를 제공해주세요.
+
+사용자 요청: {user_request}
+
+다음을 포함하여 분석해주세요:
+
+비즈니스 컨텍스트:
+- 이 분석이 비즈니스에 미치는 영향
+- 주요 성과 지표
+
+유사 사례:
+- 관련 업계 사례
+
+고려사항:
+- 분석 시 주의할 점
+- 실무적 제약사항
+""" 

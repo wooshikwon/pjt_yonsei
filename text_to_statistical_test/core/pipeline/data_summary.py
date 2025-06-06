@@ -1,686 +1,628 @@
 """
 Data Summary Pipeline
 
-3단계: 데이터 심층 분석 및 요약
-선택된 데이터에 대한 기술 통계, 변수 분포, 잠재적 이슈 (결측치, 이상치 등)를 
-심층적으로 분석하고 요약하여 사용자에게 제공합니다.
+3단계: LLM Agent 기반 데이터 심층 분석 및 요약
+LLM Agent가 데이터의 특성을 이해하고 사용자 요청과 연관지어
+지능적으로 데이터를 분석하고 인사이트를 도출합니다.
 """
 
 import logging
 from typing import Dict, Any, Optional, List
 import pandas as pd
 import numpy as np
-from pathlib import Path
+import json
 
 from .base_pipeline_step import BasePipelineStep, PipelineStepRegistry
-from utils.data_loader import DataLoader
+from services.llm.llm_client import LLMClient
 from services.statistics.descriptive_stats import DescriptiveStats
 from services.statistics.data_preprocessor import DataPreprocessor
 
 
 class DataSummaryStep(BasePipelineStep):
-    """3단계: 데이터 심층 분석 및 요약"""
+    """3단계: LLM Agent 기반 데이터 심층 분석 및 요약"""
     
     def __init__(self):
         """DataSummaryStep 초기화"""
-        super().__init__("데이터 심층 분석 및 요약", 3)
-        self.data_loader = DataLoader()
+        super().__init__("LLM Agent 기반 데이터 심층 분석", 3)
+        self.llm_client = LLMClient()
         self.stats_calculator = DescriptiveStats()
         self.preprocessor = DataPreprocessor()
         
     def validate_input(self, input_data: Dict[str, Any]) -> bool:
-        """
-        입력 데이터 유효성 검증
+        """입력 데이터 유효성 검증"""
+        required_fields = ['user_request', 'analysis_objectives', 'data_understanding']
         
-        Args:
-            input_data: 2단계에서 전달받은 데이터
-            
-        Returns:
-            bool: 유효성 검증 결과
-        """
-        required_fields = ['selected_file', 'file_info', 'user_request', 'refined_objectives']
-        return all(field in input_data for field in required_fields)
+        # 유연한 필드명 검증
+        for field in required_fields:
+            if field not in input_data:
+                # 대안 필드명 확인
+                alternative_found = False
+                if field == 'analysis_objectives':
+                    alternative_found = 'refined_objectives' in input_data
+                elif field == 'data_understanding':
+                    alternative_found = ('data_object' in input_data or 'selected_file' in input_data)
+                
+                if not alternative_found:
+                    self.logger.error(f"필수 필드 누락: {field}")
+                    return False
+        
+        return True
     
     def get_expected_output_schema(self) -> Dict[str, Any]:
-        """
-        예상 출력 스키마 반환
-        
-        Returns:
-            Dict[str, Any]: 출력 데이터 스키마
-        """
+        """예상 출력 스키마 반환"""
         return {
-            'data_overview': {
-                'basic_info': dict,
-                'shape': dict,
-                'data_types': dict,
-                'memory_usage': dict
-            },
-            'descriptive_statistics': {
-                'numerical_summary': dict,
-                'categorical_summary': dict,
-                'correlation_matrix': dict
-            },
-            'data_quality_assessment': {
-                'missing_values': dict,
-                'outliers': dict,
-                'duplicates': dict,
-                'data_issues': list
-            },
-            'variable_analysis': {
-                'numerical_variables': list,
-                'categorical_variables': list,
-                'variable_relationships': dict,
-                'feature_importance': dict
-            },
-            'analysis_recommendations': {
-                'preprocessing_needed': list,
-                'suitable_analyses': list,
-                'potential_challenges': list
-            },
-            'summary_insights': {
-                'key_findings': list,
-                'data_characteristics': list,
-                'analysis_readiness': str
-            }
+            'agent_data_analysis': dict,
+            'data_insights': dict,
+            'quality_assessment': dict,
+            'analysis_recommendations': dict,
+            'data_object': object,
+            'enhanced_understanding': dict
         }
     
     def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        데이터 심층 분석 및 요약 파이프라인 실행
-        
-        Args:
-            input_data: 파이프라인 실행 컨텍스트
-                - selected_file: 선택된 파일 경로
-                - file_info: 파일 기본 정보
-                - user_request: 사용자 요청
-                - refined_objectives: 분석 목표
-                - request_metadata: 요청 메타데이터
-            
-        Returns:
-            Dict: 실행 결과
-        """
-        self.logger.info("3단계: 데이터 심층 분석 및 요약 시작")
+        """LLM Agent 기반 데이터 심층 분석 실행"""
+        self.logger.info("3단계: LLM Agent 기반 데이터 심층 분석 시작")
         
         try:
-            # 데이터 로딩
-            data = self.data_loader.load_data(input_data['selected_file'])
+            # 데이터 객체 확보
+            data = self._get_data_object(input_data)
             if data is None:
                 return {
-                    "success": False,
-                    "error": "데이터 로딩 실패",
-                    "file_path": input_data['selected_file']
+                    'error': True,
+                    'error_message': '데이터 객체를 가져올 수 없습니다.'
                 }
             
-            # 1. 데이터 개요 분석
-            data_overview = self._analyze_data_overview(data, input_data)
+            # 분석 목표 통합
+            objectives = self._get_analysis_objectives(input_data)
+            user_request = input_data.get('user_request', '')
             
-            # 2. 기술 통계 계산
-            descriptive_stats = self._calculate_descriptive_statistics(data)
+            # 기본 데이터 통계 계산
+            basic_stats = self._calculate_basic_statistics(data)
             
-            # 3. 데이터 품질 평가
-            quality_assessment = self._assess_data_quality(data)
-            
-            # 4. 변수 분석
-            variable_analysis = self._analyze_variables(data, input_data)
-            
-            # 5. 분석 추천사항 생성
-            recommendations = self._generate_analysis_recommendations(
-                data, input_data, quality_assessment, variable_analysis
+            # LLM Agent를 통한 데이터 분석
+            agent_analysis = self._analyze_data_with_llm_agent(
+                data, user_request, objectives, basic_stats
             )
             
-            # 6. 요약 인사이트 생성
-            summary_insights = self._generate_summary_insights(
-                data_overview, descriptive_stats, quality_assessment, 
-                variable_analysis, recommendations
+            # 데이터 품질 평가
+            quality_assessment = self._assess_data_quality_with_llm(data, agent_analysis)
+            
+            # 분석 추천사항 생성
+            recommendations = self._generate_recommendations_with_llm(
+                data, user_request, objectives, agent_analysis, quality_assessment
             )
             
-            self.logger.info("데이터 심층 분석 및 요약 완료")
+            # 향상된 데이터 이해 구성
+            enhanced_understanding = self._build_enhanced_understanding(
+                data, agent_analysis, quality_assessment, recommendations
+            )
+            
+            self.logger.info("LLM Agent 기반 데이터 분석 완료")
             
             return {
-                'data_overview': data_overview,
-                'descriptive_statistics': descriptive_stats,
-                'data_quality_assessment': quality_assessment,
-                'variable_analysis': variable_analysis,
+                'success': True,
+                'agent_data_analysis': agent_analysis,
+                'data_insights': agent_analysis.get('insights', {}),
+                'quality_assessment': quality_assessment,
                 'analysis_recommendations': recommendations,
-                'summary_insights': summary_insights,
-                'data_object': data,  # 다음 단계에서 사용할 데이터 객체
-                'success_message': f"📊 데이터 심층 분석이 완료되었습니다."
+                'data_object': data,
+                'enhanced_understanding': enhanced_understanding,
+                'step_info': self.get_step_info()
             }
                 
         except Exception as e:
-            self.logger.error(f"데이터 심층 분석 파이프라인 오류: {e}")
+            self.logger.error(f"LLM Agent 데이터 분석 오류: {e}")
             return {
                 'error': True,
-                'error_message': str(e),
-                'error_type': 'analysis_error'
+                'error_message': f'데이터 분석 중 오류가 발생했습니다: {str(e)}',
+                'error_type': 'agent_analysis_error'
             }
     
-    def _load_and_validate_data(self, file_path: str) -> Any:
-        """데이터 로딩 및 기본 검증"""
-        try:
-            data = self.data_loader.load_data(file_path)
-            
-            if data.empty:
-                return {
-                    'error': True,
-                    'error_message': '데이터가 비어있습니다.',
-                    'error_type': 'empty_data'
-                }
-            
+    def _get_data_object(self, input_data: Dict[str, Any]) -> Optional[pd.DataFrame]:
+        """데이터 객체 확보"""
+        # 이미 로딩된 데이터 객체가 있는 경우
+        if 'data_object' in input_data:
+            return input_data['data_object']
+        
+        # data_understanding에서 데이터 객체 확인
+        data_understanding = input_data.get('data_understanding', {})
+        if 'data_object' in data_understanding:
+            return data_understanding['data_object']
+        
+        # 파일에서 새로 로딩
+        if 'selected_file' in input_data:
+            from utils.data_loader import DataLoader
+            loader = DataLoader()
+            data, metadata = loader.load_file(input_data['selected_file'])
             return data
+        
+        return None
+    
+    def _get_analysis_objectives(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """분석 목표 통합 처리"""
+        # 우선순위: analysis_objectives > refined_objectives
+        objectives = input_data.get('analysis_objectives')
+        if not objectives:
+            objectives = input_data.get('refined_objectives', {})
+        
+        return objectives
+    
+    def _calculate_basic_statistics(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """기본 통계 계산"""
+        try:
+            numerical_cols = list(data.select_dtypes(include=['number']).columns)
+            categorical_cols = list(data.select_dtypes(include=['object', 'category']).columns)
+            
+            stats = {
+                'shape': {'rows': len(data), 'columns': len(data.columns)},
+                'columns': list(data.columns),
+                'dtypes': {col: str(dtype) for col, dtype in data.dtypes.items()},
+                'numerical_columns': numerical_cols,
+                'categorical_columns': categorical_cols,
+                'missing_values': {col: int(data[col].isnull().sum()) for col in data.columns},
+                'sample_data': data.head(5).to_dict('records')
+            }
+            
+            # 수치형 변수 기술통계
+            if numerical_cols:
+                stats['numerical_summary'] = data[numerical_cols].describe().to_dict()
+            
+            # 범주형 변수 빈도
+            if categorical_cols:
+                stats['categorical_summary'] = {}
+                for col in categorical_cols:
+                    value_counts = data[col].value_counts().head(10)
+                    stats['categorical_summary'][col] = value_counts.to_dict()
+            
+            return stats
             
         except Exception as e:
-            self.logger.error(f"데이터 로딩 오류: {e}")
+            self.logger.error(f"기본 통계 계산 오류: {e}")
             return {
-                'error': True,
-                'error_message': f'데이터 로딩 실패: {str(e)}',
-                'error_type': 'loading_error'
+                'shape': {'rows': len(data), 'columns': len(data.columns)},
+                'columns': list(data.columns),
+                'error': str(e)
             }
     
-    def _analyze_data_overview(self, data: pd.DataFrame, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """데이터 개요 분석"""
-        basic_info = {
-            'file_name': Path(input_data['selected_file']).name,
-            'total_rows': len(data),
-            'total_columns': len(data.columns),
-            'column_names': list(data.columns),
-            'index_type': str(type(data.index).__name__)
-        }
-        
-        shape_info = {
-            'dimensions': f"{data.shape[0]} rows × {data.shape[1]} columns",
-            'size': data.size,
-            'memory_usage_mb': round(data.memory_usage(deep=True).sum() / 1024 / 1024, 2)
-        }
-        
-        # 데이터 타입 분석
-        data_types = self._analyze_data_types(data)
-        
-        memory_info = {
-            'total_memory_mb': round(data.memory_usage(deep=True).sum() / 1024 / 1024, 2),
-            'memory_per_column': {
-                col: round(data.memory_usage(deep=True)[col] / 1024 / 1024, 2) 
-                for col in data.columns
-            }
-        }
-        
-        return {
-            'basic_info': basic_info,
-            'shape': shape_info,
-            'data_types': data_types,
-            'memory_usage': memory_info
-        }
-    
-    def _analyze_data_types(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """데이터 타입 분석"""
-        type_summary = {
-            'numerical': [],
-            'categorical': [],
-            'datetime': [],
-            'boolean': [],
-            'object': []
-        }
-        
-        type_counts = {
-            'numerical': 0,
-            'categorical': 0,
-            'datetime': 0,
-            'boolean': 0,
-            'object': 0
-        }
-        
-        for col in data.columns:
-            dtype = data[col].dtype
+    def _analyze_data_with_llm_agent(self, data: pd.DataFrame, user_request: str, 
+                                   objectives: Dict[str, Any], basic_stats: Dict[str, Any]) -> Dict[str, Any]:
+        """LLM Agent를 통한 데이터 분석"""
+        try:
+            # 데이터 컨텍스트 구성
+            data_context = self._build_detailed_data_context(data, basic_stats)
             
-            if pd.api.types.is_numeric_dtype(dtype):
-                if data[col].nunique() <= 10 and data[col].nunique() < len(data) * 0.05:
-                    # 수치형이지만 범주형으로 보이는 경우
-                    type_summary['categorical'].append(col)
-                    type_counts['categorical'] += 1
-                else:
-                    type_summary['numerical'].append(col)
-                    type_counts['numerical'] += 1
-            elif pd.api.types.is_datetime64_any_dtype(dtype):
-                type_summary['datetime'].append(col)
-                type_counts['datetime'] += 1
-            elif pd.api.types.is_bool_dtype(dtype):
-                type_summary['boolean'].append(col)
-                type_counts['boolean'] += 1
+            # LLM 분석 프롬프트 생성
+            analysis_prompt = self._create_data_analysis_prompt(
+                user_request, objectives, data_context, basic_stats
+            )
+            
+            # LLM Agent 실행
+            response = self.llm_client.generate_response(
+                analysis_prompt,
+                max_tokens=2000,
+                temperature=0.3
+            )
+            
+            # 응답 파싱
+            agent_analysis = self._parse_data_analysis_response(response.content)
+            
+            # 응답 검증 및 보완
+            validated_analysis = self._validate_data_analysis(
+                agent_analysis, data, basic_stats
+            )
+            
+            return validated_analysis
+            
+        except Exception as e:
+            self.logger.error(f"LLM 데이터 분석 오류: {e}")
+            return self._fallback_data_analysis(data, basic_stats)
+    
+    def _build_detailed_data_context(self, data: pd.DataFrame, basic_stats: Dict[str, Any]) -> str:
+        """상세 데이터 컨텍스트 구성"""
+        context_parts = []
+        
+        # 기본 정보
+        shape = basic_stats['shape']
+        context_parts.append(f"데이터 크기: {shape['rows']}행 × {shape['columns']}열")
+        
+        # 변수 유형별 요약
+        num_cols = len(basic_stats.get('numerical_columns', []))
+        cat_cols = len(basic_stats.get('categorical_columns', []))
+        context_parts.append(f"변수 구성: 수치형 {num_cols}개, 범주형 {cat_cols}개")
+        
+        # 결측치 현황
+        missing_info = basic_stats.get('missing_values', {})
+        total_missing = sum(missing_info.values())
+        if total_missing > 0:
+            missing_pct = round((total_missing / (shape['rows'] * shape['columns'])) * 100, 2)
+            context_parts.append(f"결측치: 전체 {total_missing}개 ({missing_pct}%)")
+        
+        # 수치형 변수 요약
+        if 'numerical_summary' in basic_stats:
+            context_parts.append("\n수치형 변수 요약:")
+            for col, stats in basic_stats['numerical_summary'].items():
+                mean_val = round(stats.get('mean', 0), 2)
+                std_val = round(stats.get('std', 0), 2)
+                context_parts.append(f"  - {col}: 평균 {mean_val}, 표준편차 {std_val}")
+        
+        # 범주형 변수 요약
+        if 'categorical_summary' in basic_stats:
+            context_parts.append("\n범주형 변수 요약:")
+            for col, counts in basic_stats['categorical_summary'].items():
+                unique_count = len(counts)
+                most_common = max(counts, key=counts.get) if counts else 'N/A'
+                context_parts.append(f"  - {col}: {unique_count}개 범주, 최빈값 '{most_common}'")
+        
+        # 샘플 데이터
+        context_parts.append("\n샘플 데이터 (처음 3행):")
+        for i, row in enumerate(basic_stats.get('sample_data', [])[:3], 1):
+            row_str = ", ".join([f"{k}={v}" for k, v in list(row.items())[:5]])
+            context_parts.append(f"  {i}. {row_str}...")
+        
+        return "\n".join(context_parts)
+    
+    def _create_data_analysis_prompt(self, user_request: str, objectives: Dict[str, Any], 
+                                   data_context: str, basic_stats: Dict[str, Any]) -> str:
+        """데이터 분석용 프롬프트 생성"""
+        prompt = f"""
+당신은 데이터 과학자입니다. 사용자의 요청과 데이터를 분석하여 깊은 인사이트를 제공해주세요.
+
+## 사용자 요청
+"{user_request}"
+
+## 분석 목표
+{json.dumps(objectives, ensure_ascii=False, indent=2)}
+
+## 데이터 정보
+{data_context}
+
+## 분석 과제
+다음을 수행해주세요:
+
+1. 사용자 요청에 맞는 데이터의 핵심 특성 파악
+2. 데이터 품질 및 분석 적합성 평가
+3. 주요 패턴, 트렌드, 이상치 식별
+4. 분석 목표 달성을 위한 데이터 준비 방안 제시
+5. 예상되는 분석 결과 및 인사이트 예측
+
+## 응답 형식 (JSON)
+```json
+{{
+    "data_characteristics": {{
+        "key_patterns": ["데이터에서 발견한 주요 패턴들"],
+        "data_distribution": "데이터 분포의 특성",
+        "variable_relationships": "주요 변수 간 관계",
+        "data_quality": "high|medium|low"
+    }},
+    "insights": {{
+        "primary_findings": ["주요 발견사항들"],
+        "potential_issues": ["잠재적 문제점들"],
+        "interesting_patterns": ["흥미로운 패턴이나 이상치"],
+        "analysis_implications": "분석에 미치는 영향"
+    }},
+    "analysis_readiness": {{
+        "suitability_for_request": "high|medium|low",
+        "required_preprocessing": ["필요한 전처리 단계들"],
+        "data_limitations": ["데이터의 한계점들"],
+        "recommended_approach": "추천 분석 접근법"
+    }},
+    "specific_observations": {{
+        "target_variables_analysis": "목표 변수들의 특성",
+        "predictor_variables_analysis": "예측 변수들의 특성",
+        "correlation_insights": "변수 간 상관관계 인사이트",
+        "outlier_impact": "이상치가 분석에 미치는 영향"
+    }},
+    "confidence": "high|medium|low",
+    "reasoning": "분석 판단의 근거"
+}}
+```
+
+사용자의 구체적인 요청을 중심으로 데이터를 해석하고, 실제 분석에 도움이 될 구체적이고 실용적인 인사이트를 제공해주세요.
+"""
+        
+        return prompt
+    
+    def _parse_data_analysis_response(self, response_content: str) -> Dict[str, Any]:
+        """LLM 데이터 분석 응답 파싱"""
+        try:
+            # JSON 블록 추출
+            json_start = response_content.find('```json')
+            json_end = response_content.find('```', json_start + 7)
+            
+            if json_start != -1 and json_end != -1:
+                json_str = response_content[json_start + 7:json_end].strip()
             else:
-                # 텍스트나 범주형
-                if data[col].nunique() <= 50:  # 범주형으로 간주
-                    type_summary['categorical'].append(col)
-                    type_counts['categorical'] += 1
-                else:
-                    type_summary['object'].append(col)
-                    type_counts['object'] += 1
-        
-        return {
-            'type_summary': type_summary,
-            'type_counts': type_counts,
-            'detailed_types': {col: str(data[col].dtype) for col in data.columns}
-        }
+                json_str = response_content.strip()
+            
+            # JSON 파싱
+            parsed_response = json.loads(json_str)
+            return parsed_response
+            
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"데이터 분석 응답 JSON 파싱 실패: {e}")
+            return {
+                "data_characteristics": {
+                    "key_patterns": ["데이터 분석을 위한 기본 패턴 식별"],
+                    "data_quality": "medium"
+                },
+                "insights": {
+                    "primary_findings": ["기본 데이터 탐색 수행"],
+                    "analysis_implications": "표준 데이터 분석 접근"
+                },
+                "confidence": "low",
+                "reasoning": "JSON 파싱 실패로 기본 분석 적용"
+            }
     
-    def _calculate_descriptive_statistics(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """기술 통계 계산"""
-        numerical_cols = data.select_dtypes(include=[np.number]).columns.tolist()
-        categorical_cols = data.select_dtypes(include=['object', 'category']).columns.tolist()
+    def _validate_data_analysis(self, analysis: Dict[str, Any], data: pd.DataFrame, 
+                              basic_stats: Dict[str, Any]) -> Dict[str, Any]:
+        """데이터 분석 결과 검증 및 보완"""
+        validated = analysis.copy()
         
-        # 수치형 변수 기술 통계
-        numerical_summary = {}
-        if numerical_cols:
-            numerical_summary = self.stats_calculator.calculate_numerical_stats(data[numerical_cols])
+        # 기본 구조 확인
+        if 'data_characteristics' not in validated:
+            validated['data_characteristics'] = {}
+        if 'insights' not in validated:
+            validated['insights'] = {}
+        if 'analysis_readiness' not in validated:
+            validated['analysis_readiness'] = {}
         
-        # 범주형 변수 기술 통계
-        categorical_summary = {}
-        if categorical_cols:
-            categorical_summary = self.stats_calculator.calculate_categorical_stats(data[categorical_cols])
+        # 데이터 품질 검증
+        missing_pct = sum(basic_stats.get('missing_values', {}).values()) / (data.shape[0] * data.shape[1]) * 100
         
-        # 상관관계 행렬 (수치형 변수들에 대해서만)
-        correlation_matrix = {}
-        if len(numerical_cols) > 1:
-            correlation_matrix = self.stats_calculator.calculate_correlation_matrix(data[numerical_cols])
+        if missing_pct > 20:
+            if 'data_quality' not in validated['data_characteristics']:
+                validated['data_characteristics']['data_quality'] = 'low'
+        elif missing_pct > 5:
+            if 'data_quality' not in validated['data_characteristics']:
+                validated['data_characteristics']['data_quality'] = 'medium'
+        else:
+            if 'data_quality' not in validated['data_characteristics']:
+                validated['data_characteristics']['data_quality'] = 'high'
         
-        return {
-            'numerical_summary': numerical_summary,
-            'categorical_summary': categorical_summary,
-            'correlation_matrix': correlation_matrix
-        }
+        # 신뢰도 조정
+        if validated.get('confidence') not in ['high', 'medium', 'low']:
+            validated['confidence'] = 'medium'
+        
+        return validated
     
-    def _assess_data_quality(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """데이터 품질 평가"""
-        # 결측치 분석
-        missing_analysis = self._analyze_missing_values(data)
-        
-        # 이상치 분석 (수치형 변수들에 대해서만)
-        outlier_analysis = self._analyze_outliers(data)
-        
-        # 중복 데이터 분석
-        duplicate_analysis = self._analyze_duplicates(data)
-        
-        # 전반적인 데이터 이슈 식별
-        data_issues = self._identify_data_issues(data, missing_analysis, outlier_analysis, duplicate_analysis)
-        
-        return {
-            'missing_values': missing_analysis,
-            'outliers': outlier_analysis,
-            'duplicates': duplicate_analysis,
-            'data_issues': data_issues
-        }
+    def _assess_data_quality_with_llm(self, data: pd.DataFrame, 
+                                    agent_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """LLM을 통한 데이터 품질 평가"""
+        try:
+            # 품질 지표 계산
+            quality_metrics = self._calculate_quality_metrics(data)
+            
+            # LLM을 통한 품질 해석
+            quality_prompt = self._create_quality_assessment_prompt(quality_metrics, agent_analysis)
+            
+            response = self.llm_client.generate_response(
+                quality_prompt,
+                max_tokens=1000,
+                temperature=0.2
+            )
+            
+            quality_assessment = self._parse_quality_response(response.content)
+            quality_assessment['metrics'] = quality_metrics
+            
+            return quality_assessment
+            
+        except Exception as e:
+            self.logger.error(f"LLM 품질 평가 오류: {e}")
+            return self._fallback_quality_assessment(data)
     
-    def _analyze_missing_values(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """결측치 분석"""
-        missing_count = data.isnull().sum()
-        missing_percent = (missing_count / len(data)) * 100
+    def _calculate_quality_metrics(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """데이터 품질 지표 계산"""
+        total_cells = data.shape[0] * data.shape[1]
+        missing_cells = data.isnull().sum().sum()
         
-        missing_summary = {
-            'total_missing': missing_count.sum(),
-            'columns_with_missing': missing_count[missing_count > 0].to_dict(),
-            'missing_percentages': missing_percent[missing_percent > 0].to_dict(),
-            'complete_rows': len(data.dropna()),
-            'missing_patterns': self._analyze_missing_patterns(data)
-        }
+        # 중복행 확인
+        duplicate_rows = data.duplicated().sum()
         
-        return missing_summary
-    
-    def _analyze_missing_patterns(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """결측치 패턴 분석"""
-        # 결측치가 있는 컬럼들만 분석
-        missing_cols = data.columns[data.isnull().any()].tolist()
-        
-        if not missing_cols:
-            return {'pattern_analysis': 'No missing values found'}
-        
-        # 결측치 패턴 조합 분석
-        missing_patterns = data[missing_cols].isnull().value_counts().head(10)
-        
-        return {
-            'top_patterns': missing_patterns.to_dict(),
-            'pattern_description': 'Most common combinations of missing values across columns'
-        }
-    
-    def _analyze_outliers(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """이상치 분석"""
-        numerical_cols = data.select_dtypes(include=[np.number]).columns.tolist()
-        
-        if not numerical_cols:
-            return {'analysis': 'No numerical columns for outlier analysis'}
-        
-        outlier_summary = {}
+        # 수치형 변수 이상치 간단 추정
+        numerical_cols = data.select_dtypes(include=['number']).columns
+        outlier_count = 0
         
         for col in numerical_cols:
             Q1 = data[col].quantile(0.25)
             Q3 = data[col].quantile(0.75)
             IQR = Q3 - Q1
+            outliers = ((data[col] < (Q1 - 1.5 * IQR)) | (data[col] > (Q3 + 1.5 * IQR))).sum()
+            outlier_count += outliers
+        
+        return {
+            'missing_percentage': round((missing_cells / total_cells) * 100, 2),
+            'duplicate_rows': int(duplicate_rows),
+            'duplicate_percentage': round((duplicate_rows / data.shape[0]) * 100, 2),
+            'outlier_count': int(outlier_count),
+            'data_consistency': 'high' if missing_cells == 0 and duplicate_rows == 0 else 'medium',
+            'completeness_score': round(((total_cells - missing_cells) / total_cells) * 100, 2)
+        }
+    
+    def _create_quality_assessment_prompt(self, quality_metrics: Dict[str, Any], 
+                                        agent_analysis: Dict[str, Any]) -> str:
+        """품질 평가 프롬프트 생성"""
+        return f"""
+데이터 품질 지표를 해석하고 분석에 미치는 영향을 평가해주세요.
+
+## 품질 지표
+- 결측치 비율: {quality_metrics['missing_percentage']}%
+- 중복행 비율: {quality_metrics['duplicate_percentage']}%
+- 추정 이상치 개수: {quality_metrics['outlier_count']}개
+- 완성도 점수: {quality_metrics['completeness_score']}%
+
+## 이전 분석 결과
+{json.dumps(agent_analysis, ensure_ascii=False, indent=2)}
+
+다음 형식으로 응답해주세요:
+
+```json
+{{
+    "overall_quality": "excellent|good|fair|poor",
+    "quality_issues": ["주요 품질 이슈들"],
+    "impact_on_analysis": "분석에 미치는 영향",
+    "recommendations": ["품질 개선 권장사항들"],
+    "proceed_with_analysis": "yes|caution|no"
+}}
+```
+"""
+    
+    def _parse_quality_response(self, response_content: str) -> Dict[str, Any]:
+        """품질 평가 응답 파싱"""
+        try:
+            json_start = response_content.find('```json')
+            json_end = response_content.find('```', json_start + 7)
             
-            lower_bound = Q1 - 1.5 * IQR
-            upper_bound = Q3 + 1.5 * IQR
+            if json_start != -1 and json_end != -1:
+                json_str = response_content[json_start + 7:json_end].strip()
+            else:
+                json_str = response_content.strip()
             
-            outliers = data[(data[col] < lower_bound) | (data[col] > upper_bound)]
+            return json.loads(json_str)
             
-            outlier_summary[col] = {
-                'outlier_count': len(outliers),
-                'outlier_percentage': round((len(outliers) / len(data)) * 100, 2),
-                'lower_bound': lower_bound,
-                'upper_bound': upper_bound,
-                'extreme_values': {
-                    'min': data[col].min(),
-                    'max': data[col].max()
-                }
+        except json.JSONDecodeError:
+            return {
+                "overall_quality": "fair",
+                "quality_issues": ["자동 품질 평가 수행"],
+                "impact_on_analysis": "표준 분석 절차 적용",
+                "proceed_with_analysis": "yes"
             }
-        
-        return outlier_summary
     
-    def _analyze_duplicates(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """중복 데이터 분석"""
-        duplicate_rows = data.duplicated()
-        
+    def _generate_recommendations_with_llm(self, data: pd.DataFrame, user_request: str,
+                                         objectives: Dict[str, Any], agent_analysis: Dict[str, Any],
+                                         quality_assessment: Dict[str, Any]) -> Dict[str, Any]:
+        """LLM을 통한 분석 추천사항 생성"""
+        try:
+            recommendations_prompt = f"""
+사용자 요청과 데이터 분석 결과를 바탕으로 최적의 분석 전략을 추천해주세요.
+
+## 사용자 요청
+"{user_request}"
+
+## 데이터 분석 결과
+{json.dumps(agent_analysis, ensure_ascii=False, indent=2)}
+
+## 품질 평가 결과
+{json.dumps(quality_assessment, ensure_ascii=False, indent=2)}
+
+다음 형식으로 응답해주세요:
+
+```json
+{{
+    "recommended_analyses": ["추천 분석 방법들"],
+    "preprocessing_steps": ["필요한 전처리 단계들"],
+    "potential_challenges": ["예상되는 분석 어려움들"],
+    "success_factors": ["분석 성공을 위한 요소들"],
+    "alternative_approaches": ["대안 접근 방법들"],
+    "expected_insights": ["기대할 수 있는 인사이트들"]
+}}
+```
+"""
+            
+            response = self.llm_client.generate_response(
+                recommendations_prompt,
+                max_tokens=1200,
+                temperature=0.3
+            )
+            
+            return self._parse_recommendations_response(response.content)
+            
+        except Exception as e:
+            self.logger.error(f"추천사항 생성 오류: {e}")
+            return self._fallback_recommendations()
+    
+    def _parse_recommendations_response(self, response_content: str) -> Dict[str, Any]:
+        """추천사항 응답 파싱"""
+        try:
+            json_start = response_content.find('```json')
+            json_end = response_content.find('```', json_start + 7)
+            
+            if json_start != -1 and json_end != -1:
+                json_str = response_content[json_start + 7:json_end].strip()
+            else:
+                json_str = response_content.strip()
+            
+            return json.loads(json_str)
+            
+        except json.JSONDecodeError:
+            return self._fallback_recommendations()
+    
+    def _build_enhanced_understanding(self, data: pd.DataFrame, agent_analysis: Dict[str, Any],
+                                    quality_assessment: Dict[str, Any], 
+                                    recommendations: Dict[str, Any]) -> Dict[str, Any]:
+        """향상된 데이터 이해 구성"""
         return {
-            'total_duplicates': duplicate_rows.sum(),
-            'duplicate_percentage': round((duplicate_rows.sum() / len(data)) * 100, 2),
-            'unique_rows': len(data) - duplicate_rows.sum(),
-            'duplicate_subset_analysis': self._analyze_partial_duplicates(data)
+            'data_summary': {
+                'shape': data.shape,
+                'columns': list(data.columns),
+                'quality_score': quality_assessment.get('overall_quality', 'fair')
+            },
+            'analysis_insights': agent_analysis.get('insights', {}),
+            'readiness_assessment': agent_analysis.get('analysis_readiness', {}),
+            'quality_overview': quality_assessment,
+            'next_steps': recommendations.get('recommended_analyses', []),
+            'preprocessing_needed': recommendations.get('preprocessing_steps', []),
+            'confidence_level': agent_analysis.get('confidence', 'medium')
         }
     
-    def _analyze_partial_duplicates(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """부분 중복 분석"""
-        # 주요 컬럼들에 대한 부분 중복 검사
-        important_cols = data.columns[:5].tolist()  # 처음 5개 컬럼만 분석
+    def _fallback_data_analysis(self, data: pd.DataFrame, basic_stats: Dict[str, Any]) -> Dict[str, Any]:
+        """백업 데이터 분석 (LLM 실패 시)"""
+        return {
+            "data_characteristics": {
+                "key_patterns": ["기본 데이터 탐색"],
+                "data_quality": "medium"
+            },
+            "insights": {
+                "primary_findings": [f"{data.shape[0]}행 {data.shape[1]}열의 데이터"],
+                "analysis_implications": "표준 통계 분석 수행 가능"
+            },
+            "analysis_readiness": {
+                "suitability_for_request": "medium",
+                "recommended_approach": "기술통계 및 시각화"
+            },
+            "confidence": "low",
+            "reasoning": "LLM 분석 실패로 기본 접근법 적용"
+        }
+    
+    def _fallback_quality_assessment(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """백업 품질 평가"""
+        missing_pct = (data.isnull().sum().sum() / (data.shape[0] * data.shape[1])) * 100
         
-        partial_duplicates = {}
-        for col in important_cols:
-            duplicate_values = data[col].duplicated()
-            partial_duplicates[col] = {
-                'duplicate_count': duplicate_values.sum(),
-                'unique_values': data[col].nunique(),
-                'most_common': data[col].value_counts().head(3).to_dict()
+        return {
+            "overall_quality": "good" if missing_pct < 5 else "fair",
+            "quality_issues": [f"결측치 {missing_pct:.1f}%"],
+            "impact_on_analysis": "표준 전처리 후 분석 가능",
+            "proceed_with_analysis": "yes",
+            "metrics": {
+                "missing_percentage": round(missing_pct, 2),
+                "completeness_score": round(100 - missing_pct, 2)
             }
-        
-        return partial_duplicates
-    
-    def _identify_data_issues(self, data: pd.DataFrame, missing_analysis: Dict, 
-                            outlier_analysis: Dict, duplicate_analysis: Dict) -> List[str]:
-        """전반적인 데이터 이슈 식별"""
-        issues = []
-        
-        # 결측치 관련 이슈
-        if missing_analysis['total_missing'] > 0:
-            high_missing_cols = [
-                col for col, pct in missing_analysis['missing_percentages'].items() 
-                if pct > 20
-            ]
-            if high_missing_cols:
-                issues.append(f"높은 결측치 비율 컬럼: {', '.join(high_missing_cols)}")
-        
-        # 이상치 관련 이슈
-        if isinstance(outlier_analysis, dict) and outlier_analysis.get('analysis') != 'No numerical columns for outlier analysis':
-            high_outlier_cols = [
-                col for col, info in outlier_analysis.items() 
-                if info.get('outlier_percentage', 0) > 5
-            ]
-            if high_outlier_cols:
-                issues.append(f"이상치가 많은 컬럼: {', '.join(high_outlier_cols)}")
-        
-        # 중복 데이터 이슈
-        if duplicate_analysis['duplicate_percentage'] > 5:
-            issues.append(f"중복 데이터 비율이 높음: {duplicate_analysis['duplicate_percentage']}%")
-        
-        # 데이터 크기 관련 이슈
-        if len(data) < 30:
-            issues.append("표본 크기가 작음 (통계적 검정에 제한이 있을 수 있음)")
-        
-        # 변수 수 관련 이슈
-        if len(data.columns) > len(data):
-            issues.append("변수 수가 관측치 수보다 많음 (차원의 저주 가능성)")
-        
-        return issues
-    
-    def _analyze_variables(self, data: pd.DataFrame, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """변수 분석"""
-        numerical_vars = data.select_dtypes(include=[np.number]).columns.tolist()
-        categorical_vars = data.select_dtypes(include=['object', 'category']).columns.tolist()
-        
-        # 사용자가 언급한 변수들과 매칭
-        request_metadata = input_data.get('request_metadata', {})
-        target_variables = request_metadata.get('target_variables', [])
-        group_variables = request_metadata.get('group_variables', [])
-        
-        # 변수 간 관계 분석
-        relationships = self._analyze_variable_relationships(data, numerical_vars, categorical_vars)
-        
-        # 특성 중요도 분석 (간단한 버전)
-        feature_importance = self._analyze_feature_importance(data, target_variables)
-        
-        return {
-            'numerical_variables': numerical_vars,
-            'categorical_variables': categorical_vars,
-            'target_variables': target_variables,
-            'group_variables': group_variables,
-            'variable_relationships': relationships,
-            'feature_importance': feature_importance
         }
     
-    def _analyze_variable_relationships(self, data: pd.DataFrame, 
-                                      numerical_vars: List[str], 
-                                      categorical_vars: List[str]) -> Dict[str, Any]:
-        """변수 간 관계 분석"""
-        relationships = {}
-        
-        # 수치형 변수 간 상관관계
-        if len(numerical_vars) > 1:
-            corr_matrix = data[numerical_vars].corr()
-            high_correlations = []
-            
-            for i in range(len(numerical_vars)):
-                for j in range(i+1, len(numerical_vars)):
-                    corr_value = corr_matrix.iloc[i, j]
-                    if abs(corr_value) > 0.7:  # 높은 상관관계
-                        high_correlations.append({
-                            'var1': numerical_vars[i],
-                            'var2': numerical_vars[j],
-                            'correlation': round(corr_value, 3)
-                        })
-            
-            relationships['high_correlations'] = high_correlations
-        
-        # 범주형 변수와 수치형 변수 간 관계 (간단한 분석)
-        cat_num_relationships = []
-        for cat_var in categorical_vars[:3]:  # 처음 3개만 분석
-            for num_var in numerical_vars[:3]:  # 처음 3개만 분석
-                try:
-                    grouped = data.groupby(cat_var)[num_var].agg(['mean', 'std', 'count'])
-                    if len(grouped) > 1:  # 그룹이 여러 개 있는 경우
-                        cat_num_relationships.append({
-                            'categorical_var': cat_var,
-                            'numerical_var': num_var,
-                            'group_stats': grouped.to_dict('index')
-                        })
-                except:
-                    continue
-        
-        relationships['categorical_numerical'] = cat_num_relationships[:5]  # 최대 5개까지
-        
-        return relationships
-    
-    def _analyze_feature_importance(self, data: pd.DataFrame, target_variables: List[str]) -> Dict[str, Any]:
-        """특성 중요도 분석 (간단한 버전)"""
-        if not target_variables:
-            return {'analysis': 'No target variables specified'}
-        
-        importance_analysis = {}
-        
-        for target_var in target_variables:
-            if target_var in data.columns:
-                # 간단한 상관관계 기반 중요도
-                numerical_cols = data.select_dtypes(include=[np.number]).columns.tolist()
-                if target_var in numerical_cols and len(numerical_cols) > 1:
-                    correlations = data[numerical_cols].corr()[target_var].abs().sort_values(ascending=False)
-                    importance_analysis[target_var] = correlations.head(5).to_dict()
-        
-        return importance_analysis
-    
-    def _generate_analysis_recommendations(self, data: pd.DataFrame, input_data: Dict[str, Any],
-                                         quality_assessment: Dict[str, Any],
-                                         variable_analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """분석 추천사항 생성"""
-        preprocessing_needed = []
-        suitable_analyses = []
-        potential_challenges = []
-        
-        # 전처리 추천
-        if quality_assessment['missing_values']['total_missing'] > 0:
-            preprocessing_needed.append("결측치 처리 (제거 또는 대체)")
-        
-        if quality_assessment['duplicates']['duplicate_percentage'] > 1:
-            preprocessing_needed.append("중복 데이터 제거")
-        
-        # 이상치가 많은 경우
-        outlier_analysis = quality_assessment['outliers']
-        if isinstance(outlier_analysis, dict):
-            high_outlier_cols = [
-                col for col, info in outlier_analysis.items() 
-                if isinstance(info, dict) and info.get('outlier_percentage', 0) > 10
-            ]
-            if high_outlier_cols:
-                preprocessing_needed.append("이상치 처리 고려")
-        
-        # 적합한 분석 방법 추천
-        request_metadata = input_data.get('request_metadata', {})
-        analysis_type = request_metadata.get('analysis_type', 'unknown')
-        
-        num_vars = len(variable_analysis['numerical_variables'])
-        cat_vars = len(variable_analysis['categorical_variables'])
-        
-        if analysis_type == 'group_comparison':
-            if cat_vars > 0 and num_vars > 0:
-                suitable_analyses.append("그룹 간 평균 비교 (t-검정, ANOVA)")
-            if cat_vars > 1:
-                suitable_analyses.append("범주형 변수 간 연관성 분석 (카이제곱 검정)")
-        
-        elif analysis_type == 'relationship':
-            if num_vars > 1:
-                suitable_analyses.append("상관관계 분석")
-                suitable_analyses.append("회귀분석")
-        
-        elif analysis_type == 'categorical':
-            if cat_vars > 1:
-                suitable_analyses.append("카이제곱 독립성 검정")
-                suitable_analyses.append("Fisher의 정확검정")
-        
-        # 잠재적 도전과제
-        if len(data) < 30:
-            potential_challenges.append("작은 표본 크기로 인한 검정력 제한")
-        
-        if quality_assessment['missing_values']['total_missing'] > len(data) * 0.1:
-            potential_challenges.append("높은 결측치 비율로 인한 편향 가능성")
-        
-        if num_vars > 0:
-            # 정규성 간단 체크
-            numerical_data = data.select_dtypes(include=[np.number])
-            for col in numerical_data.columns:
-                if len(numerical_data[col].dropna()) > 0:
-                    # 간단한 정규성 체크 (왜도, 첨도)
-                    skewness = numerical_data[col].skew()
-                    if abs(skewness) > 2:
-                        potential_challenges.append(f"{col} 변수의 비정규성 (왜도: {round(skewness, 2)})")
-                        break
-        
+    def _fallback_recommendations(self) -> Dict[str, Any]:
+        """백업 추천사항"""
         return {
-            'preprocessing_needed': preprocessing_needed,
-            'suitable_analyses': suitable_analyses,
-            'potential_challenges': potential_challenges
-        }
-    
-    def _generate_summary_insights(self, data_overview: Dict, descriptive_stats: Dict,
-                                 quality_assessment: Dict, variable_analysis: Dict,
-                                 recommendations: Dict) -> Dict[str, Any]:
-        """요약 인사이트 생성"""
-        key_findings = []
-        data_characteristics = []
-        
-        # 주요 발견사항
-        total_rows = data_overview['basic_info']['total_rows']
-        total_cols = data_overview['basic_info']['total_columns']
-        key_findings.append(f"데이터셋 크기: {total_rows:,}행 × {total_cols}열")
-        
-        num_vars = len(variable_analysis['numerical_variables'])
-        cat_vars = len(variable_analysis['categorical_variables'])
-        key_findings.append(f"변수 구성: 수치형 {num_vars}개, 범주형 {cat_vars}개")
-        
-        missing_total = quality_assessment['missing_values']['total_missing']
-        if missing_total > 0:
-            missing_pct = round((missing_total / (total_rows * total_cols)) * 100, 1)
-            key_findings.append(f"결측치: 전체 데이터의 {missing_pct}%")
-        
-        # 데이터 특성
-        if total_rows >= 1000:
-            data_characteristics.append("대용량 데이터셋")
-        elif total_rows < 100:
-            data_characteristics.append("소규모 데이터셋")
-        else:
-            data_characteristics.append("중간 규모 데이터셋")
-        
-        if quality_assessment['duplicates']['duplicate_percentage'] < 1:
-            data_characteristics.append("중복 데이터 거의 없음")
-        
-        if missing_total == 0:
-            data_characteristics.append("결측치 없는 완전한 데이터")
-        
-        # 분석 준비도 평가
-        readiness_score = 0
-        
-        # 긍정적 요소
-        if missing_total == 0:
-            readiness_score += 30
-        elif missing_total < total_rows * total_cols * 0.05:
-            readiness_score += 20
-        
-        if quality_assessment['duplicates']['duplicate_percentage'] < 5:
-            readiness_score += 20
-        
-        if total_rows >= 30:
-            readiness_score += 20
-        
-        if len(recommendations['preprocessing_needed']) <= 2:
-            readiness_score += 15
-        
-        if num_vars > 0 and cat_vars > 0:
-            readiness_score += 15  # 다양한 변수 타입
-        
-        # 분석 준비도 결정
-        if readiness_score >= 80:
-            analysis_readiness = "excellent"
-        elif readiness_score >= 60:
-            analysis_readiness = "good"
-        elif readiness_score >= 40:
-            analysis_readiness = "fair"
-        else:
-            analysis_readiness = "poor"
-        
-        return {
-            'key_findings': key_findings,
-            'data_characteristics': data_characteristics,
-            'analysis_readiness': analysis_readiness,
-            'readiness_score': readiness_score
+            "recommended_analyses": ["기술통계분석", "데이터 시각화"],
+            "preprocessing_steps": ["결측치 처리", "이상치 확인"],
+            "potential_challenges": ["데이터 품질 이슈"],
+            "success_factors": ["적절한 전처리"],
+            "expected_insights": ["데이터 기본 특성 파악"]
         }
     
     def get_step_info(self) -> Dict[str, Any]:
-        """단계 정보 반환 (부모 클래스 메서드 확장)"""
+        """단계 정보 반환"""
         base_info = super().get_step_info()
         base_info.update({
-            'description': '데이터 심층 분석 및 요약',
-            'input_requirements': ['selected_file', 'file_info', 'user_request', 'refined_objectives'],
+            'description': 'LLM Agent 기반 데이터 심층 분석',
+            'input_requirements': ['user_request', 'analysis_objectives', 'data_understanding'],
             'output_provides': [
-                'data_overview', 'descriptive_statistics', 'data_quality_assessment',
-                'variable_analysis', 'analysis_recommendations', 'summary_insights'
+                'agent_data_analysis', 'data_insights', 'quality_assessment', 
+                'analysis_recommendations', 'enhanced_understanding'
             ],
             'capabilities': [
-                '기술 통계 계산', '데이터 품질 평가', '변수 관계 분석',
-                '결측치/이상치 탐지', '분석 추천사항 제공'
+                'LLM 기반 데이터 해석', '지능적 품질 평가', '맞춤형 분석 추천', 
+                '자동 인사이트 도출'
             ]
         })
         return base_info
 
 
-# 단계 등록
-PipelineStepRegistry.register_step(3, DataSummaryStep) 

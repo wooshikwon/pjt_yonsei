@@ -12,7 +12,7 @@
 
 ### 재구성된 8단계 워크플로우
 1.  **데이터 파일 선택 및 초기 이해**: `input_data/data_files/` 폴더의 데이터 파일 목록을 표시하고, 사용자가 선택합니다. 시스템은 선택된 데이터의 기본적인 메타정보를 파악합니다.
-2.  **사용자의 자연어 요청 및 목표 정의 (Multi-turn)**: 사용자가 자연어로 분석 목표와 궁금증을 전달합니다. 시스템은 **대화형으로 추가 질문**을 통해 분석의 범위와 구체적인 목표를 명확히 합니다. 이 과정은 `core/pipeline/user_request.py`와 연계되어 Agentic LLM의 자연어 이해 능력을 활용합니다.
+2.  **사용자의 자연어 요청 및 목표 정의 (Multi-turn)**: 사용자가 자연어로 분석 목표와 궁금증을 전달합니다.
 3.  **데이터 심층 분석 및 요약**: 선택된 데이터에 대한 기술 통계, 변수 분포, 잠재적 이슈 (결측치, 이상치 등)를 심층적으로 분석하고 요약하여 사용자에게 제공합니다. 이 과정은 `core/pipeline/data_summary.py`에서 처리하며, Agentic LLM이 RAG를 통해 얻은 데이터 특성 이해를 바탕으로 진행합니다.
 4.  **Agentic LLM의 분석 전략 제안 (RAG 활용)**: Agentic LLM (`core/agent/autonomous_agent.py`)은 사용자의 요청, 데이터 특성, RAG를 통해 확보한 **도메인 지식**(예: `resources/knowledge_base/business_domains/`) 및 **통계적 지식**(예: `resources/knowledge_base/statistical_concepts/`)을 종합하여 가능한 분석 방법들과 각 방법의 장단점을 제시합니다. 이 단계는 `core/pipeline/analysis_proposal.py`를 통해 이루어집니다.
 5.  **사용자 피드백 기반 분석 방식 구체화 (Multi-turn)**: 사용자는 LLM의 제안을 검토하고, 필요한 경우 추가적인 요구사항이나 선호하는 분석 방향을 제시합니다. 시스템은 이를 반영하여 최종 분석 계획을 확정합니다. 이 단계는 `core/pipeline/user_selection.py`를 통해 사용자와의 상호작용을 관리합니다.

@@ -220,12 +220,13 @@ class DataSelectionStep(BasePipelineStep):
                     "file_path": file_path
                 }
 
-            # 데이터 로딩 시도
-            data = self.data_loader.load_data(file_path)
+            # 데이터 로딩 시도 (올바른 메서드명 사용)
+            data, metadata = self.data_loader.load_file(file_path)
             if data is None:
+                error_msg = metadata.get('error', '데이터 로딩 실패')
                 return {
                     "success": False,
-                    "error": "데이터 로딩 실패",
+                    "error": error_msg,
                     "file_path": file_path
                 }
             
@@ -235,8 +236,9 @@ class DataSelectionStep(BasePipelineStep):
             # 데이터 미리보기 생성
             data_preview = self._generate_data_preview(data)
             
-            # 메타데이터 수집
-            metadata = self._collect_metadata(file_path, data)
+            # 메타데이터 수집 (로더의 메타데이터와 병합)
+            file_metadata = self._collect_metadata(file_path, data)
+            file_metadata.update(metadata)  # 로더의 메타데이터 추가
             
             self.logger.info(f"데이터 파일 분석 완료: {file_path}")
             
@@ -244,7 +246,7 @@ class DataSelectionStep(BasePipelineStep):
                 'selected_file': file_path,
                 'file_info': file_info,
                 'data_preview': data_preview,
-                'metadata': metadata,
+                'metadata': file_metadata,
                 'data_object': data,
                 'success_message': f"✅ 파일 선택 및 분석 완료: {Path(file_path).name}"
             }
@@ -317,5 +319,3 @@ class DataSelectionStep(BasePipelineStep):
         return base_info
 
 
-# 단계 등록
-PipelineStepRegistry.register_step(1, DataSelectionStep) 

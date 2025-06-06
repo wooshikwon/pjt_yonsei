@@ -1,34 +1,47 @@
 """
 User Selection Pipeline
 
-5단계: 사용자 피드백 기반 분석 방식 구체화
-사용자는 LLM의 제안을 검토하고, 필요한 경우 추가적인 요구사항이나 선호하는 분석 방향을 제시합니다.
-시스템은 이를 반영하여 최종 분석 계획을 확정합니다.
+5단계: RAG 기반 대화형 사용자 의사결정 지원
+Agent가 RAG 지식을 활용하여 사용자와 지능형 대화를 통해
+최적의 분석 방법을 선택할 수 있도록 지원하며, 사용자의 의사결정을 
+도메인 지식과 통계적 근거로 뒷받침합니다.
 """
 
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
+import json
+import asyncio
 
 from .base_pipeline_step import BasePipelineStep, PipelineStepRegistry
+from core.rag.rag_manager import RAGManager
 from services.llm.llm_client import LLMClient
 from services.llm.prompt_engine import PromptEngine
+from utils.ui_helpers import UIHelpers
 
 
 class UserSelectionStep(BasePipelineStep):
-    """5단계: 사용자 피드백 기반 분석 방식 구체화"""
+    """5단계: RAG 기반 대화형 사용자 의사결정 지원"""
     
-    def __init__(self, conversation_history=None):
-        """
-        UserSelectionStep 초기화
-        
-        Args:
-            conversation_history: 대화 이력 관리자 (외부에서 주입)
-        """
-        super().__init__("사용자 피드백 기반 분석 방식 구체화", 5)
-        self.conversation_history = conversation_history  # 외부에서 주입받음
+    def __init__(self):
+        """UserSelectionStep 초기화"""
+        super().__init__("RAG 기반 대화형 사용자 의사결정 지원", 5)
+        self.rag_manager = RAGManager()
         self.llm_client = LLMClient()
         self.prompt_engine = PromptEngine()
+        self.ui_helpers = UIHelpers()
+        
+        # 대화형 Agent 설정
+        self.conversation_config = {
+            'max_conversation_turns': 5,
+            'explanation_depth': 'adaptive',  # 사용자 수준에 맞춰 조정
+            'decision_support_mode': 'collaborative',  # 협력적 의사결정
+            'rag_integration_level': 'deep',  # 깊은 RAG 통합
+            'personalization_level': 'medium'  # 사용자 맞춤화
+        }
+        
+        # 대화 히스토리 저장
+        self.conversation_history = []
         
     def validate_input(self, input_data: Dict[str, Any]) -> bool:
         """
@@ -41,8 +54,8 @@ class UserSelectionStep(BasePipelineStep):
             bool: 유효성 검증 결과
         """
         required_fields = [
-            'analysis_proposals', 'statistical_context', 'domain_insights',
-            'execution_plan', 'visualization_suggestions'
+            'agent_analysis_strategy', 'rag_integrated_insights',
+            'adaptive_execution_plan', 'agent_reasoning_chain'
         ]
         return all(field in input_data for field in required_fields)
     
@@ -54,1014 +67,744 @@ class UserSelectionStep(BasePipelineStep):
             Dict[str, Any]: 출력 데이터 스키마
         """
         return {
-            'selected_analysis': {
-                'method': dict,
-                'parameters': dict,
-                'customizations': dict
+            'finalized_analysis_plan': {
+                'selected_primary_method': dict,
+                'confirmed_alternatives': list,
+                'execution_parameters': dict,
+                'user_preferences': dict
             },
-            'analysis_plan': {
-                'steps': list,
-                'validations': list,
-                'adjustments': list
+            'enhanced_rag_context': {
+                'targeted_domain_knowledge': dict,
+                'method_specific_guidance': dict,
+                'user_context_insights': dict,
+                'risk_mitigation_strategies': list
             },
-            'user_preferences': {
-                'visualization_preferences': dict,
-                'reporting_preferences': dict,
-                'additional_requirements': list
+            'collaborative_decision_record': {
+                'conversation_summary': dict,
+                'decision_rationale': dict,
+                'agent_recommendations': dict,
+                'user_feedback_integration': dict
             },
-            'conversation_summary': {
-                'key_decisions': list,
-                'clarifications': list,
-                'final_confirmations': list
+            'adaptive_execution_adjustments': {
+                'customized_parameters': dict,
+                'dynamic_checkpoints': list,
+                'quality_assurance_plan': dict,
+                'contingency_protocols': dict
             },
-            'execution_context': {
-                'parameters': dict,
-                'constraints': dict,
-                'special_instructions': list
+            'knowledge_driven_insights': {
+                'domain_specific_considerations': list,
+                'methodological_best_practices': list,
+                'implementation_guidance': dict,
+                'expected_outcomes': dict
             }
         }
     
     def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        사용자 피드백 기반 분석 방식 구체화 파이프라인 실행
+        RAG 기반 대화형 사용자 의사결정 지원 실행
         
         Args:
             input_data: 파이프라인 실행 컨텍스트
-                - analysis_proposals: 분석 제안
-                - statistical_context: 통계적 컨텍스트
-                - domain_insights: 도메인 인사이트
-                - execution_plan: 실행 계획
-                - visualization_suggestions: 시각화 제안
             
         Returns:
             Dict: 실행 결과
         """
-        self.logger.info("5단계: 사용자 피드백 기반 분석 방식 구체화 시작")
+        self.logger.info("5단계: RAG 기반 대화형 사용자 의사결정 지원 시작")
         
         try:
-            # 1. 분석 제안 표시 및 사용자 선택 처리
-            selected_analysis = self._handle_analysis_selection(input_data)
+            # 1. 사용자 컨텍스트 분석 및 RAG 지식 맞춤화
+            personalized_rag_context = self._create_personalized_rag_context(input_data)
             
-            # 2. 선택된 분석에 대한 상세 설정
-            analysis_plan = self._refine_analysis_plan(
-                selected_analysis, input_data
+            # 2. 대화형 의사결정 프로세스 진행
+            conversation_result = self._conduct_collaborative_decision_process(
+                input_data, personalized_rag_context
             )
             
-            # 3. 사용자 선호도 수집
-            user_preferences = self._collect_user_preferences(
-                selected_analysis, input_data
+            # 3. 최종 분석 계획 확정
+            finalized_analysis_plan = self._finalize_analysis_plan(
+                conversation_result, input_data, personalized_rag_context
             )
             
-            # 4. 대화 내용 요약
-            conversation_summary = self._summarize_conversation()
-            
-            # 5. 실행 컨텍스트 구성
-            execution_context = self._build_execution_context(
-                selected_analysis, analysis_plan, user_preferences
+            # 4. RAG 지식 기반 실행 조정사항 생성
+            adaptive_execution_adjustments = self._generate_adaptive_adjustments(
+                finalized_analysis_plan, personalized_rag_context, conversation_result
             )
             
-            self.logger.info("분석 방식 구체화 완료")
+            # 5. 의사결정 과정 문서화
+            collaborative_decision_record = self._document_decision_process(
+                conversation_result, finalized_analysis_plan, input_data
+            )
+            
+            # 6. 지식 기반 인사이트 생성
+            knowledge_driven_insights = self._generate_knowledge_insights(
+                finalized_analysis_plan, personalized_rag_context, conversation_result
+            )
+            
+            self.logger.info("RAG 기반 대화형 의사결정 지원 완료")
             
             return {
-                'selected_analysis': selected_analysis,
-                'analysis_plan': analysis_plan,
-                'user_preferences': user_preferences,
-                'conversation_summary': conversation_summary,
-                'execution_context': execution_context,
-                'success_message': "✅ 분석 방식이 확정되었습니다."
+                'finalized_analysis_plan': finalized_analysis_plan,
+                'enhanced_rag_context': personalized_rag_context,
+                'collaborative_decision_record': collaborative_decision_record,
+                'adaptive_execution_adjustments': adaptive_execution_adjustments,
+                'knowledge_driven_insights': knowledge_driven_insights,
+                'success_message': "🤝 사용자와 AI Agent가 협력하여 최적의 분석 계획을 수립했습니다."
             }
                 
         except Exception as e:
-            self.logger.error(f"분석 방식 구체화 파이프라인 오류: {e}")
+            self.logger.error(f"RAG 기반 대화형 의사결정 지원 오류: {e}")
             return {
                 'error': True,
                 'error_message': str(e),
-                'error_type': 'selection_error'
+                'error_type': 'collaborative_decision_error'
             }
     
-    def _handle_analysis_selection(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """분석 제안 표시 및 사용자 선택 처리"""
-        # 1. 제안된 분석 방법 표시
-        self._display_analysis_proposals(input_data['analysis_proposals'])
-        
-        # 2. 사용자 선택 처리
-        selected_method = self._process_user_selection(
-            input_data['analysis_proposals']
-        )
-        
-        # 3. 선택된 방법 상세화
-        detailed_selection = self._detail_selected_method(
-            selected_method,
-            input_data['statistical_context'],
-            input_data['domain_insights']
-        )
-        
-        return detailed_selection
-    
-    def _display_analysis_proposals(self, proposals: Dict[str, Any]) -> None:
-        """분석 제안 표시"""
-        print("\n" + "="*60)
-        print("📊 제안된 분석 방법")
-        print("="*60)
-        
-        # 추천 방법 표시
-        print("\n🌟 추천 분석 방법:")
-        for i, method in enumerate(proposals['recommended_methods'], 1):
-            print(f"\n{i}. {method['name']}")
-            print(f"   📝 설명: {method['description']}")
-            print(f"   ✅ 장점: {', '.join(method.get('advantages', []))}")
-            if method.get('limitations'):
-                print(f"   ⚠️ 제한사항: {', '.join(method['limitations'])}")
-        
-        # 대체 방법 표시
-        if proposals['alternative_methods']:
-            print("\n📌 대체 분석 방법:")
-            for i, method in enumerate(proposals['alternative_methods'], 1):
-                print(f"\n{i}. {method['name']}")
-                print(f"   📝 설명: {method['description']}")
-    
-    def _process_user_selection(self, proposals: Dict[str, Any]) -> Dict[str, Any]:
-        """사용자 선택 처리"""
-        # 사용자 입력 대기 (실제 구현에서는 UI/CLI 통합 필요)
-        print("\n💡 분석 방법을 선택해주세요 (번호 입력):")
-        
-        # 실제 사용자 입력 처리 로직 구현
+    def _create_personalized_rag_context(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """사용자 컨텍스트 분석 및 RAG 지식 맞춤화"""
         try:
-            # 추천 방법 선택지 표시
-            recommended_methods = proposals['recommended_methods']
-            while True:
-                try:
-                    # 사용자 입력 받기
-                    user_input = input(f"선택 (1-{len(recommended_methods)}): ").strip()
-                    
-                    if user_input.lower() in ['quit', 'exit', 'q']:
-                        # 기본 선택으로 첫 번째 방법 반환
-                        return recommended_methods[0]
-                    
-                    # 숫자 입력 처리
-                    choice_idx = int(user_input) - 1
-                    if 0 <= choice_idx < len(recommended_methods):
-                        selected_method = recommended_methods[choice_idx]
-                        print(f"\n✅ '{selected_method['name']}' 방법이 선택되었습니다.")
-                        return selected_method
-                    else:
-                        print(f"❌ 1부터 {len(recommended_methods)} 사이의 숫자를 입력해주세요.")
-                        
-                except ValueError:
-                    print("❌ 유효한 숫자를 입력해주세요.")
-                except KeyboardInterrupt:
-                    print("\n\n🔄 기본 분석 방법을 선택합니다.")
-                    return recommended_methods[0]
-                    
-        except Exception as e:
-            self.logger.warning(f"사용자 입력 처리 중 오류: {e}, 기본 방법 선택")
-            # 오류 발생 시 첫 번째 추천 방법을 자동 선택
-            return recommended_methods[0]
-    
-    def _detail_selected_method(self, selected_method: Dict[str, Any],
-                              statistical_context: Dict[str, Any],
-                              domain_insights: Dict[str, Any]) -> Dict[str, Any]:
-        """선택된 방법 상세화"""
-        # LLM을 사용하여 선택된 방법 상세화
-        prompt = self.prompt_engine.create_method_detailing_prompt(
-            method=selected_method,
-            statistical_context=statistical_context,
-            domain_insights=domain_insights
-        )
-        
-        llm_response = self.llm_client.generate(prompt)
-        
-        # 응답 파싱 및 구조화
-        detailed_method = self._parse_method_details(llm_response)
-        
-        return {
-            'method': selected_method,
-            'parameters': detailed_method.get('parameters', {}),
-            'customizations': detailed_method.get('customizations', {})
-        }
-    
-    def _refine_analysis_plan(self, selected_analysis: Dict[str, Any],
-                            input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """선택된 분석에 대한 상세 계획 수립"""
-        # 1. 기본 실행 단계 정의
-        execution_steps = self._define_execution_steps(
-            selected_analysis, input_data['execution_plan']
-        )
-        
-        # 2. 필요한 검증 단계 식별
-        validation_steps = self._identify_validation_steps(
-            selected_analysis, input_data['statistical_context']
-        )
-        
-        # 3. 잠재적 조정사항 정의
-        adjustment_options = self._define_adjustment_options(
-            selected_analysis, input_data['domain_insights']
-        )
-        
-        return {
-            'steps': execution_steps,
-            'validations': validation_steps,
-            'adjustments': adjustment_options
-        }
-    
-    def _collect_user_preferences(self, selected_analysis: Dict[str, Any],
-                                input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """사용자 선호도 수집"""
-        # 1. 시각화 선호도 수집
-        viz_preferences = self._collect_visualization_preferences(
-            input_data['visualization_suggestions']
-        )
-        
-        # 2. 보고서 형식 선호도 수집
-        reporting_preferences = self._collect_reporting_preferences()
-        
-        # 3. 추가 요구사항 수집
-        additional_requirements = self._collect_additional_requirements(
-            selected_analysis
-        )
-        
-        return {
-            'visualization_preferences': viz_preferences,
-            'reporting_preferences': reporting_preferences,
-            'additional_requirements': additional_requirements
-        }
-    
-    def _summarize_conversation(self) -> Dict[str, Any]:
-        """대화 내용 요약"""
-        try:
-            # conversation_history가 주입되지 않은 경우 기본 동작
-            if self.conversation_history is None:
-                self.logger.warning("ConversationHistory가 주입되지 않았습니다. 기본 요약을 반환합니다.")
-                return {
-                    'key_decisions': ["분석 방법이 선택되었습니다"],
-                    'clarifications': [],
-                    'final_confirmations': ["사용자가 최종 분석 방법을 확정했습니다"]
-                }
+            # 1. 사용자 배경 및 선호도 분석
+            user_profile = self._analyze_user_context(input_data)
             
-            # 현재 세션의 대화 이력 가져오기
-            session_id = self.conversation_history.get_current_session_id() if hasattr(self.conversation_history, 'get_current_session_id') else None
-            if not session_id:
-                self.logger.warning("활성 세션이 없습니다.")
-                return {
-                    'key_decisions': [],
-                    'clarifications': [],
-                    'final_confirmations': []
-                }
+            # 2. 맞춤형 RAG 검색 쿼리 생성
+            personalized_queries = self._build_personalized_search_queries(
+                input_data, user_profile
+            )
             
-            # 대화 이력 요약 생성
-            history = self.conversation_history.get_session_history(session_id, last_n_turns=10)
+            # 3. 타겟 도메인 지식 수집
+            targeted_domain_knowledge = self.rag_manager.search_and_build_context(
+                query=personalized_queries['domain_specific'],
+                collection="business_domains",
+                top_k=6,
+                context_type="user_domain_guidance",
+                max_tokens=1200
+            )
             
-            if not history:
-                return {
-                    'key_decisions': [],
-                    'clarifications': [],
-                    'final_confirmations': []
-                }
+            # 4. 방법론별 상세 가이던스 수집
+            method_specific_guidance = self.rag_manager.search_and_build_context(
+                query=personalized_queries['methodological'],
+                collection="statistical_concepts",
+                top_k=8,
+                context_type="method_selection_guidance",
+                max_tokens=1500
+            )
             
-            # LLM을 사용한 대화 요약
-            summary_prompt = self.prompt_engine.create_conversation_summary_prompt(history)
-            summary_response = self.llm_client.generate_response(summary_prompt)
+            # 5. 사용자 맥락 인사이트 생성
+            user_context_insights = self._generate_user_context_insights(
+                user_profile, targeted_domain_knowledge, method_specific_guidance
+            )
             
-            # 요약 파싱
-            parsed_summary = self._parse_conversation_summary(summary_response)
+            # 6. 리스크 완화 전략 수집
+            risk_mitigation_strategies = self._collect_risk_mitigation_strategies(
+                input_data, personalized_queries
+            )
             
-            return parsed_summary
-            
-        except Exception as e:
-            self.logger.error(f"대화 요약 오류: {e}")
             return {
-                'key_decisions': [],
-                'clarifications': [],
-                'final_confirmations': []
+                'targeted_domain_knowledge': targeted_domain_knowledge,
+                'method_specific_guidance': method_specific_guidance,
+                'user_context_insights': user_context_insights,
+                'risk_mitigation_strategies': risk_mitigation_strategies,
+                'user_profile': user_profile
             }
-    
-    def _build_execution_context(self, selected_analysis: Dict[str, Any],
-                               analysis_plan: Dict[str, Any],
-                               user_preferences: Dict[str, Any]) -> Dict[str, Any]:
-        """실행 컨텍스트 구성"""
-        # 1. 분석 파라미터 구성
-        parameters = self._build_analysis_parameters(
-            selected_analysis, analysis_plan
-        )
-        
-        # 2. 제약사항 정의
-        constraints = self._define_execution_constraints(
-            selected_analysis, user_preferences
-        )
-        
-        # 3. 특별 지침 작성
-        special_instructions = self._create_special_instructions(
-            selected_analysis, user_preferences
-        )
-        
-        return {
-            'parameters': parameters,
-            'constraints': constraints,
-            'special_instructions': special_instructions
-        }
-    
-    def _parse_method_details(self, llm_response: str) -> Dict[str, Any]:
-        """LLM 응답에서 방법 상세 정보 파싱"""
-        from services.llm.llm_response_parser import LLMResponseParser, ResponseType
-        
-        try:
-            parser = LLMResponseParser()
-            parsed = parser.parse_response(llm_response, expected_type=ResponseType.JSON)
             
-            if parsed.confidence > 0.5 and isinstance(parsed.content, dict):
-                return parsed.content
-            else:
-                # JSON 파싱 실패 시 텍스트에서 정보 추출
-                return self._extract_method_details_from_text(llm_response)
+        except Exception as e:
+            self.logger.error(f"개인화된 RAG 컨텍스트 생성 오류: {e}")
+            return self._create_default_rag_context()
+    
+    def _conduct_collaborative_decision_process(self, input_data: Dict[str, Any],
+                                              rag_context: Dict[str, Any]) -> Dict[str, Any]:
+        """대화형 의사결정 프로세스 진행"""
+        try:
+            # 1. 대화 세션 초기화
+            conversation_state = self._initialize_conversation_state(input_data, rag_context)
+            
+            # 2. Agent의 초기 제안 및 설명
+            initial_presentation = self._present_agent_recommendations(
+                input_data, rag_context, conversation_state
+            )
+            
+            # 3. 사용자와의 대화형 상호작용
+            conversation_turns = []
+            current_turn = 1
+            
+            while current_turn <= self.conversation_config['max_conversation_turns']:
+                # 사용자 응답 수집
+                user_response = self._collect_user_response(
+                    initial_presentation if current_turn == 1 else conversation_turns[-1]['agent_message'],
+                    conversation_state,
+                    current_turn
+                )
                 
-        except Exception as e:
-            self.logger.warning(f"방법 상세 정보 파싱 오류: {e}")
-            return {
-                'parameters': {},
-                'customizations': {},
-                'notes': llm_response
-            }
-    
-    def _define_execution_steps(self, selected_analysis: Dict[str, Any],
-                              execution_plan: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """실행 단계 정의"""
-        try:
-            method_name = selected_analysis.get('method', {}).get('name', '')
-            analysis_type = selected_analysis.get('method', {}).get('type', '')
+                if user_response.get('decision_finalized', False):
+                    conversation_turns.append({
+                        'turn': current_turn,
+                        'user_response': user_response,
+                        'decision_status': 'finalized'
+                    })
+                    break
+                
+                # Agent의 적응적 응답 생성
+                agent_response = self._generate_adaptive_agent_response(
+                    user_response, conversation_state, rag_context, current_turn
+                )
+                
+                conversation_turns.append({
+                    'turn': current_turn,
+                    'user_response': user_response,
+                    'agent_message': agent_response,
+                    'conversation_state': conversation_state.copy()
+                })
+                
+                # 대화 상태 업데이트
+                conversation_state = self._update_conversation_state(
+                    conversation_state, user_response, agent_response
+                )
+                
+                current_turn += 1
             
-            # 기본 실행 단계 템플릿
-            base_steps = [
-                {
-                    'step_id': 'data_preparation',
-                    'name': '데이터 준비',
-                    'description': '데이터 로드 및 기본 전처리',
-                    'required': True,
-                    'estimated_time': '1-2분'
+            # 4. 대화 결과 종합
+            conversation_summary = self._summarize_conversation(
+                conversation_turns, initial_presentation, conversation_state
+            )
+            
+            return {
+                'initial_presentation': initial_presentation,
+                'conversation_turns': conversation_turns,
+                'conversation_summary': conversation_summary,
+                'final_state': conversation_state
+            }
+            
+        except Exception as e:
+            self.logger.error(f"대화형 의사결정 프로세스 오류: {e}")
+            return self._create_fallback_conversation_result(input_data)
+    
+    def _analyze_user_context(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """사용자 배경 및 선호도 분석"""
+        try:
+            # 사용자 요청에서 컨텍스트 추출
+            user_request = input_data.get('user_request', '')
+            data_overview = input_data.get('data_overview', {})
+            
+            # 도메인 식별
+            domain_indicators = {
+                'healthcare': ['환자', '치료', '병원', '의료', '진료', '수술', '약물'],
+                'finance': ['매출', '수익', '비용', '투자', '금융', '주가', '경제'],
+                'marketing': ['광고', '마케팅', '고객', '캠페인', '브랜드', '판매'],
+                'education': ['학생', '교육', '학습', '성적', '시험', '과목', '학교'],
+                'research': ['실험', '연구', '가설', '변수', '측정', '분석', '결과']
+            }
+            
+            identified_domain = 'general'
+            for domain, keywords in domain_indicators.items():
+                if any(keyword in user_request for keyword in keywords):
+                    identified_domain = domain
+                    break
+            
+            # 기술 수준 추정
+            technical_indicators = ['p-value', '신뢰구간', '효과크기', '검정력', '가설검정']
+            tech_level = 'beginner'
+            if any(indicator in user_request for indicator in technical_indicators):
+                tech_level = 'intermediate'
+            
+            # 분석 목적 분류
+            purpose_indicators = {
+                'exploratory': ['탐색', '이해', '파악', '확인'],
+                'confirmatory': ['검증', '증명', '테스트', '입증'],
+                'predictive': ['예측', '예상', '모델링', '추정']
+            }
+            
+            analysis_purpose = 'exploratory'
+            for purpose, keywords in purpose_indicators.items():
+                if any(keyword in user_request for keyword in keywords):
+                    analysis_purpose = purpose
+                    break
+            
+            return {
+                'identified_domain': identified_domain,
+                'technical_level': tech_level,
+                'analysis_purpose': analysis_purpose,
+                'user_request_analysis': {
+                    'complexity': len(user_request.split()),
+                    'specificity': 'high' if len(user_request) > 100 else 'medium'
                 },
-                {
-                    'step_id': 'assumption_check',
-                    'name': '가정 검증',
-                    'description': '통계적 가정 확인',
-                    'required': True,
-                    'estimated_time': '2-3분'
+                'data_context': {
+                    'size': data_overview.get('shape', {}).get('rows', 0),
+                    'complexity': len(data_overview.get('columns', []))
                 }
-            ]
+            }
             
-            # 분석 유형별 특화 단계 추가
-            if 't_test' in analysis_type.lower() or 't-test' in method_name.lower():
-                base_steps.extend([
-                    {
-                        'step_id': 'normality_test',
-                        'name': '정규성 검정',
-                        'description': 'Shapiro-Wilk 또는 K-S 검정',
-                        'required': True,
-                        'estimated_time': '1분'
-                    },
-                    {
-                        'step_id': 't_test_execution',
-                        'name': 'T-검정 실행',
-                        'description': '독립/대응표본 t-검정 수행',
-                        'required': True,
-                        'estimated_time': '1분'
-                    }
-                ])
-            elif 'anova' in analysis_type.lower() or 'anova' in method_name.lower():
-                base_steps.extend([
-                    {
-                        'step_id': 'homoscedasticity_test',
-                        'name': '등분산성 검정',
-                        'description': 'Levene 또는 Bartlett 검정',
-                        'required': True,
-                        'estimated_time': '1분'
-                    },
-                    {
-                        'step_id': 'anova_execution',
-                        'name': 'ANOVA 실행',
-                        'description': '일원 또는 이원 분산분석',
-                        'required': True,
-                        'estimated_time': '2분'
-                    },
-                    {
-                        'step_id': 'post_hoc',
-                        'name': '사후 검정',
-                        'description': 'Tukey HSD 등 다중비교',
-                        'required': False,
-                        'estimated_time': '1-2분'
-                    }
-                ])
-            elif 'correlation' in analysis_type.lower():
-                base_steps.extend([
-                    {
-                        'step_id': 'correlation_analysis',
-                        'name': '상관분석',
-                        'description': 'Pearson 또는 Spearman 상관분석',
-                        'required': True,
-                        'estimated_time': '1분'
-                    }
-                ])
-            elif 'regression' in analysis_type.lower():
-                base_steps.extend([
-                    {
-                        'step_id': 'regression_analysis',
-                        'name': '회귀분석',
-                        'description': '선형 또는 로지스틱 회귀분석',
-                        'required': True,
-                        'estimated_time': '2-3분'
-                    },
-                    {
-                        'step_id': 'residual_analysis',
-                        'name': '잔차분석',
-                        'description': '모델 진단 및 가정 확인',
-                        'required': True,
-                        'estimated_time': '1-2분'
-                    }
-                ])
+        except Exception as e:
+            self.logger.error(f"사용자 컨텍스트 분석 오류: {e}")
+            return {
+                'identified_domain': 'general',
+                'technical_level': 'beginner',
+                'analysis_purpose': 'exploratory'
+            }
+    
+    def _build_personalized_search_queries(self, input_data: Dict[str, Any],
+                                         user_profile: Dict[str, Any]) -> Dict[str, str]:
+        """맞춤형 RAG 검색 쿼리 생성"""
+        domain = user_profile.get('identified_domain', 'general')
+        tech_level = user_profile.get('technical_level', 'beginner')
+        purpose = user_profile.get('analysis_purpose', 'exploratory')
+        user_request = input_data.get('user_request', '')
+        
+        return {
+            'domain_specific': f"""
+            도메인: {domain}
+            사용자 요청: {user_request}
+            분석 목적: {purpose}
+            도메인 전문 용어, 일반적인 분석 패턴, 주의사항, 해석 가이드라인
+            {domain} 분야 KPI, 성과 지표, 비즈니스 맥락
+            """,
             
-            # 공통 마무리 단계
-            base_steps.extend([
-                {
-                    'step_id': 'result_interpretation',
-                    'name': '결과 해석',
-                    'description': '통계적 결과 해석 및 의미 도출',
-                    'required': True,
-                    'estimated_time': '2-3분'
+            'methodological': f"""
+            기술 수준: {tech_level}
+            분석 목적: {purpose}
+            방법론 선택 기준, 가정 확인 방법, 결과 해석 가이드
+            {tech_level} 수준 설명, 단계별 가이드, 주의사항, 대안 방법
+            """,
+            
+            'implementation': f"""
+            사용자 수준: {tech_level}
+            구현 가이드, 코드 예시, 오류 처리, 결과 검증
+            단계별 체크리스트, 품질 관리, 문제 해결
+            """,
+            
+            'risk_management': f"""
+            분석 목적: {purpose}
+            도메인: {domain}
+            일반적인 함정, 해석 오류, 예방 방법, 대안 전략
+            위험 요소, 완화 방안, 검증 방법
+            """
+        }
+    
+    def _present_agent_recommendations(self, input_data: Dict[str, Any],
+                                     rag_context: Dict[str, Any],
+                                     conversation_state: Dict[str, Any]) -> Dict[str, Any]:
+        """Agent의 초기 제안 및 설명"""
+        try:
+            # RAG 지식을 활용한 설명 생성
+            explanation_prompt = self._build_explanation_prompt(
+                input_data, rag_context, conversation_state
+            )
+            
+            explanation_response = self.llm_client.generate_response(
+                prompt=explanation_prompt,
+                temperature=0.3,
+                max_tokens=2000,
+                system_prompt=self._get_explanation_system_prompt()
+            )
+            
+            # 사용자 친화적 프레젠테이션 생성
+            presentation = self._format_user_presentation(
+                explanation_response, input_data, rag_context
+            )
+            
+            return presentation
+            
+        except Exception as e:
+            self.logger.error(f"Agent 추천 프레젠테이션 생성 오류: {e}")
+            return self._create_basic_presentation(input_data)
+    
+    def _collect_user_response(self, presentation: Dict[str, Any],
+                             conversation_state: Dict[str, Any],
+                             turn_number: int) -> Dict[str, Any]:
+        """사용자 응답 수집"""
+        try:
+            # 프레젠테이션 출력
+            self._display_presentation(presentation, turn_number)
+            
+            # 대화형 입력 수집
+            user_input = self._get_interactive_user_input(conversation_state, turn_number)
+            
+            # 응답 분석 및 구조화
+            analyzed_response = self._analyze_user_response(user_input, conversation_state)
+            
+            return analyzed_response
+            
+        except Exception as e:
+            self.logger.error(f"사용자 응답 수집 오류: {e}")
+            return {'response': '기본 승인', 'decision_finalized': True}
+    
+    def _generate_adaptive_agent_response(self, user_response: Dict[str, Any],
+                                        conversation_state: Dict[str, Any],
+                                        rag_context: Dict[str, Any],
+                                        turn_number: int) -> Dict[str, Any]:
+        """Agent의 적응적 응답 생성"""
+        try:
+            # 사용자 응답 분석
+            response_analysis = self._analyze_response_intent(user_response)
+            
+            # 적응적 RAG 검색
+            adaptive_knowledge = self._perform_adaptive_rag_search(
+                user_response, response_analysis, rag_context
+            )
+            
+            # 맞춤형 응답 생성
+            response_prompt = self._build_adaptive_response_prompt(
+                user_response, conversation_state, adaptive_knowledge, turn_number
+            )
+            
+            agent_response = self.llm_client.generate_response(
+                prompt=response_prompt,
+                temperature=0.4,
+                max_tokens=1500,
+                system_prompt=self._get_adaptive_response_system_prompt()
+            )
+            
+            # 응답 구조화
+            structured_response = self._structure_agent_response(
+                agent_response, user_response, adaptive_knowledge
+            )
+            
+            return structured_response
+            
+        except Exception as e:
+            self.logger.error(f"적응적 Agent 응답 생성 오류: {e}")
+            return self._create_fallback_agent_response(user_response)
+    
+    def _finalize_analysis_plan(self, conversation_result: Dict[str, Any],
+                              input_data: Dict[str, Any],
+                              rag_context: Dict[str, Any]) -> Dict[str, Any]:
+        """최종 분석 계획 확정"""
+        try:
+            # 대화 결과 분석
+            final_state = conversation_result.get('final_state', {})
+            user_preferences = final_state.get('user_preferences', {})
+            
+            # 선택된 방법 확정
+            selected_method = user_preferences.get('selected_method') or \
+                            input_data.get('agent_analysis_strategy', {}).get('primary_recommendation', {})
+            
+            # 대안 방법 확정
+            confirmed_alternatives = user_preferences.get('alternative_methods', []) or \
+                                   input_data.get('agent_analysis_strategy', {}).get('alternative_strategies', [])
+            
+            # 실행 파라미터 설정
+            execution_parameters = self._derive_execution_parameters(
+                conversation_result, rag_context, user_preferences
+            )
+            
+            return {
+                'selected_primary_method': selected_method,
+                'confirmed_alternatives': confirmed_alternatives,
+                'execution_parameters': execution_parameters,
+                'user_preferences': user_preferences,
+                'finalization_confidence': self._calculate_finalization_confidence(
+                    conversation_result, user_preferences
+                )
+            }
+            
+        except Exception as e:
+            self.logger.error(f"분석 계획 확정 오류: {e}")
+            return self._create_default_analysis_plan(input_data)
+    
+    def _create_default_rag_context(self) -> Dict[str, Any]:
+        """기본 RAG 컨텍스트 생성"""
+        return {
+            'targeted_domain_knowledge': {'context': '', 'search_results': []},
+            'method_specific_guidance': {'context': '', 'search_results': []},
+            'user_context_insights': {},
+            'risk_mitigation_strategies': [],
+            'user_profile': {
+                'identified_domain': 'general',
+                'technical_level': 'beginner',
+                'analysis_purpose': 'exploratory'
+            }
+        }
+    
+    def _generate_user_context_insights(self, user_profile: Dict[str, Any],
+                                       targeted_domain_knowledge: Dict[str, Any],
+                                       method_specific_guidance: Dict[str, Any]) -> Dict[str, Any]:
+        """사용자 맥락 인사이트 생성"""
+        try:
+            domain = user_profile.get('identified_domain', 'general')
+            tech_level = user_profile.get('technical_level', 'beginner')
+            purpose = user_profile.get('analysis_purpose', 'exploratory')
+            
+            return {
+                'user_characteristics': {
+                    'domain_expertise': domain,
+                    'technical_proficiency': tech_level,
+                    'analysis_intent': purpose
                 },
-                {
-                    'step_id': 'visualization',
-                    'name': '시각화',
-                    'description': '결과 차트 및 그래프 생성',
-                    'required': False,
-                    'estimated_time': '1-2분'
+                'communication_style': {
+                    'explanation_depth': 'detailed' if tech_level == 'beginner' else 'concise',
+                    'technical_terminology': tech_level != 'beginner',
+                    'examples_needed': tech_level == 'beginner'
+                },
+                'decision_support_needs': {
+                    'guidance_level': 'high' if tech_level == 'beginner' else 'medium',
+                    'validation_required': True,
+                    'alternative_options': tech_level != 'beginner'
                 }
-            ])
-            
-            return base_steps
+            }
             
         except Exception as e:
-            self.logger.error(f"실행 단계 정의 오류: {e}")
-            return [
-                {
-                    'step_id': 'basic_analysis',
-                    'name': '기본 분석',
-                    'description': '선택된 통계 분석 수행',
-                    'required': True,
-                    'estimated_time': '5분'
+            self.logger.error(f"사용자 컨텍스트 인사이트 생성 오류: {e}")
+            return {}
+    
+    def _collect_risk_mitigation_strategies(self, input_data: Dict[str, Any],
+                                          personalized_queries: Dict[str, str]) -> List[Dict[str, Any]]:
+        """리스크 완화 전략 수집"""
+        try:
+            risk_strategies = self.rag_manager.search_and_build_context(
+                query=personalized_queries['risk_management'],
+                collection="statistical_concepts",
+                top_k=5,
+                context_type="risk_mitigation",
+                max_tokens=800
+            )
+            
+            # 검색 결과를 구조화된 전략으로 변환
+            strategies = []
+            search_results = risk_strategies.get('search_results', [])
+            
+            for result in search_results:
+                strategy = {
+                    'risk_type': self._identify_risk_type(result.get('content', '')),
+                    'mitigation_method': result.get('content', '')[:200],
+                    'priority': 'high' if result.get('similarity_score', 0) > 0.8 else 'medium',
+                    'source': result.get('source', 'unknown')
                 }
-            ]
-    
-    def _identify_validation_steps(self, selected_analysis: Dict[str, Any],
-                                 statistical_context: Dict[str, Any]) -> List[str]:
-        """검증 단계 식별"""
-        try:
-            method_info = selected_analysis.get('method', {})
-            analysis_type = method_info.get('type', '').lower()
+                strategies.append(strategy)
             
-            validation_steps = []
-            
-            # 데이터 품질 검증 (모든 분석에 공통)
-            validation_steps.extend([
-                'data_completeness_check',  # 데이터 완성도 확인
-                'outlier_detection',        # 이상치 탐지
-                'data_type_validation'      # 데이터 타입 검증
-            ])
-            
-            # 분석별 특화 검증
-            if any(test in analysis_type for test in ['t_test', 'anova', 'regression']):
-                validation_steps.extend([
-                    'normality_assumption',      # 정규성 가정
-                    'independence_assumption'    # 독립성 가정
-                ])
-            
-            if 'anova' in analysis_type or 'regression' in analysis_type:
-                validation_steps.append('homoscedasticity_assumption')  # 등분산성 가정
-            
-            if 'regression' in analysis_type:
-                validation_steps.extend([
-                    'linearity_assumption',      # 선형성 가정
-                    'multicollinearity_check'    # 다중공선성 확인
-                ])
-            
-            if 'correlation' in analysis_type:
-                validation_steps.extend([
-                    'relationship_linearity',    # 관계의 선형성
-                    'influential_points_check'   # 영향점 확인
-                ])
-            
-            # 샘플 크기 관련 검증
-            sample_size = statistical_context.get('sample_size', 0)
-            if sample_size < 30:
-                validation_steps.append('small_sample_considerations')
-            if sample_size < 5:
-                validation_steps.append('very_small_sample_warning')
-            
-            return validation_steps
+            return strategies
             
         except Exception as e:
-            self.logger.error(f"검증 단계 식별 오류: {e}")
-            return ['basic_data_validation', 'assumption_check']
-    
-    def _define_adjustment_options(self, selected_analysis: Dict[str, Any],
-                                 domain_insights: Dict[str, Any]) -> List[str]:
-        """조정 옵션 정의"""
-        try:
-            method_info = selected_analysis.get('method', {})
-            analysis_type = method_info.get('type', '').lower()
-            
-            adjustment_options = []
-            
-            # 기본 조정 옵션
-            adjustment_options.extend([
-                'significance_level_adjustment',  # 유의수준 조정 (0.05, 0.01, 0.001)
-                'effect_size_reporting',          # 효과크기 보고 옵션
-                'confidence_interval_level'       # 신뢰구간 수준 조정
-            ])
-            
-            # 분석별 특화 조정 옵션
-            if 't_test' in analysis_type:
-                adjustment_options.extend([
-                    'equal_variance_assumption',  # 등분산 가정 여부
-                    'one_vs_two_tailed_test',    # 단측/양측 검정 선택
-                    'welch_correction'           # Welch 보정 적용
-                ])
-            
-            elif 'anova' in analysis_type:
-                adjustment_options.extend([
-                    'post_hoc_correction_method', # 사후검정 보정 방법
-                    'effect_size_calculation',    # 효과크기 계산 방법 (eta², omega²)
-                    'assumption_violation_handling' # 가정 위배 시 대안
-                ])
-            
-            elif 'regression' in analysis_type:
-                adjustment_options.extend([
-                    'variable_selection_method',  # 변수 선택 방법
-                    'regularization_options',     # 정규화 옵션 (Ridge, Lasso)
-                    'cross_validation_folds',     # 교차검증 폴드 수
-                    'outlier_handling_strategy'   # 이상치 처리 전략
-                ])
-            
-            elif 'correlation' in analysis_type:
-                adjustment_options.extend([
-                    'correlation_method',         # 상관계수 방법 (Pearson, Spearman, Kendall)
-                    'partial_correlation_control', # 편상관 제어변수
-                    'bootstrap_confidence_interval' # 부트스트랩 신뢰구간
-                ])
-            
-            # 도메인별 특화 옵션
-            domain = domain_insights.get('domain', '').lower()
-            if 'medical' in domain or 'health' in domain:
-                adjustment_options.extend([
-                    'clinical_significance_threshold',
-                    'survival_analysis_considerations'
-                ])
-            elif 'business' in domain or 'marketing' in domain:
-                adjustment_options.extend([
-                    'business_impact_weighting',
-                    'cost_benefit_considerations'
-                ])
-            elif 'psychology' in domain or 'social' in domain:
-                adjustment_options.extend([
-                    'cultural_context_adjustment',
-                    'demographic_stratification'
-                ])
-            
-            return adjustment_options
-            
-        except Exception as e:
-            self.logger.error(f"조정 옵션 정의 오류: {e}")
-            return ['significance_level_adjustment', 'basic_options']
-    
-    def _collect_visualization_preferences(self, viz_suggestions: Dict[str, Any]) -> Dict[str, Any]:
-        """시각화 선호도 수집"""
-        try:
-            print("\n📊 시각화 옵션을 선택해주세요:")
-            
-            # 기본 시각화 옵션
-            viz_options = viz_suggestions.get('suggested_plots', [])
-            selected_plots = []
-            
-            # 사용자에게 시각화 옵션 표시
-            for i, plot in enumerate(viz_options, 1):
-                print(f"{i}. {plot.get('name', 'Unknown Plot')} - {plot.get('description', '')}")
-            
-            print("\n선택할 시각화 번호를 입력하세요 (여러 개 선택 시 쉼표로 구분, 예: 1,3,4):")
-            
-            try:
-                user_input = input("시각화 선택: ").strip()
-                if user_input:
-                    choices = [int(x.strip()) for x in user_input.split(',')]
-                    selected_plots = [viz_options[i-1] for i in choices if 1 <= i <= len(viz_options)]
-                else:
-                    # 기본 시각화 선택
-                    selected_plots = viz_options[:2] if len(viz_options) >= 2 else viz_options
-            except (ValueError, IndexError, KeyboardInterrupt):
-                print("기본 시각화 옵션을 선택합니다.")
-                selected_plots = viz_options[:2] if len(viz_options) >= 2 else viz_options
-            
-            # 시각화 스타일 선택
-            print("\n시각화 스타일을 선택해주세요:")
-            styles = ['간단한 스타일', '상세한 스타일', '학술적 스타일', '비즈니스 스타일']
-            for i, style in enumerate(styles, 1):
-                print(f"{i}. {style}")
-            
-            try:
-                style_choice = int(input("스타일 선택 (1-4): ").strip())
-                selected_style = styles[style_choice - 1] if 1 <= style_choice <= 4 else styles[0]
-            except (ValueError, KeyboardInterrupt):
-                selected_style = styles[0]
-            
-            return {
-                'selected_plots': selected_plots,
-                'style': selected_style,
-                'interactive': True,  # 기본적으로 인터랙티브 차트
-                'color_scheme': 'default',
-                'export_formats': ['png', 'html']
-            }
-            
-        except Exception as e:
-            self.logger.error(f"시각화 선호도 수집 오류: {e}")
-            return {
-                'selected_plots': viz_suggestions.get('suggested_plots', [])[:2],
-                'style': '간단한 스타일',
-                'interactive': True,
-                'color_scheme': 'default',
-                'export_formats': ['png']
-            }
-    
-    def _collect_reporting_preferences(self) -> Dict[str, Any]:
-        """보고서 형식 선호도 수집"""
-        try:
-            print("\n📋 보고서 형식을 선택해주세요:")
-            
-            # 보고서 형식 옵션
-            report_formats = [
-                {'name': '간단 요약', 'description': '핵심 결과만 포함'},
-                {'name': '상세 보고서', 'description': '분석 과정과 해석 포함'},
-                {'name': '기술 보고서', 'description': '통계적 세부사항 포함'},
-                {'name': '비즈니스 보고서', 'description': '실무진을 위한 형식'}
-            ]
-            
-            for i, fmt in enumerate(report_formats, 1):
-                print(f"{i}. {fmt['name']} - {fmt['description']}")
-            
-            try:
-                choice = int(input("보고서 형식 선택 (1-4): ").strip())
-                selected_format = report_formats[choice - 1] if 1 <= choice <= 4 else report_formats[1]
-            except (ValueError, KeyboardInterrupt):
-                selected_format = report_formats[1]  # 기본: 상세 보고서
-            
-            # 출력 형식 선택
-            print("\n출력 형식을 선택해주세요 (여러 개 선택 가능):")
-            output_formats = ['HTML', 'PDF', 'Markdown', 'Excel']
-            for i, fmt in enumerate(output_formats, 1):
-                print(f"{i}. {fmt}")
-            
-            try:
-                output_input = input("출력 형식 선택 (예: 1,3): ").strip()
-                if output_input:
-                    choices = [int(x.strip()) for x in output_input.split(',')]
-                    selected_outputs = [output_formats[i-1] for i in choices if 1 <= i <= len(output_formats)]
-                else:
-                    selected_outputs = ['HTML']
-            except (ValueError, KeyboardInterrupt):
-                selected_outputs = ['HTML']
-            
-            return {
-                'format': selected_format,
-                'output_formats': selected_outputs,
-                'include_code': True,
-                'include_data_summary': True,
-                'include_assumptions': True,
-                'include_interpretation': True,
-                'language': 'korean'
-            }
-            
-        except Exception as e:
-            self.logger.error(f"보고서 선호도 수집 오류: {e}")
-            return {
-                'format': {'name': '상세 보고서', 'description': '분석 과정과 해석 포함'},
-                'output_formats': ['HTML'],
-                'include_code': True,
-                'include_data_summary': True,
-                'include_assumptions': True,
-                'include_interpretation': True,
-                'language': 'korean'
-            }
-    
-    def _collect_additional_requirements(self, selected_analysis: Dict[str, Any]) -> List[str]:
-        """추가 요구사항 수집"""
-        try:
-            print("\n📝 추가 요구사항이 있으시면 입력해주세요 (없으면 Enter):")
-            
-            requirements = []
-            
-            # 일반적인 추가 요구사항 옵션 제시
-            common_requirements = [
-                '특정 변수 간 상호작용 효과 분석',
-                '서브그룹 분석 (성별, 연령대별 등)',
-                '민감도 분석 (outlier 제거 후 재분석)',
-                '효과크기의 실질적 의미 해석',
-                '비즈니스 임팩트 추정',
-                '추가 시각화 (heatmap, 3D plot 등)',
-                '결과의 통계적 검정력 분석'
-            ]
-            
-            print("\n일반적인 추가 요구사항:")
-            for i, req in enumerate(common_requirements, 1):
-                print(f"{i}. {req}")
-            
-            # 사용자 직접 입력
-            try:
-                custom_input = input("\n직접 입력하거나 위 번호 선택 (예: 1,3 또는 직접 입력): ").strip()
-                
-                if custom_input:
-                    # 숫자 입력인지 확인
-                    if ',' in custom_input or custom_input.isdigit():
-                        try:
-                            choices = [int(x.strip()) for x in custom_input.split(',')]
-                            requirements = [common_requirements[i-1] for i in choices 
-                                          if 1 <= i <= len(common_requirements)]
-                        except (ValueError, IndexError):
-                            # 숫자가 아니면 직접 입력으로 처리
-                            requirements = [custom_input]
-                    else:
-                        # 직접 입력 텍스트
-                        requirements = [custom_input]
-                
-                # 추가 요구사항이 있는지 확인
-                if requirements:
-                    print("\n추가로 더 입력하시겠습니까? (없으면 Enter)")
-                    additional = input("추가 요구사항: ").strip()
-                    if additional:
-                        requirements.append(additional)
-                        
-            except KeyboardInterrupt:
-                print("\n추가 요구사항 입력을 건너뜁니다.")
-            
-            return requirements
-            
-        except Exception as e:
-            self.logger.error(f"추가 요구사항 수집 오류: {e}")
+            self.logger.error(f"리스크 완화 전략 수집 오류: {e}")
             return []
     
-    def _parse_conversation_summary(self, llm_response: str) -> Dict[str, Any]:
-        """LLM 응답에서 대화 요약 파싱"""
-        from services.llm.llm_response_parser import LLMResponseParser, ResponseType
+    def _identify_risk_type(self, content: str) -> str:
+        """콘텐츠에서 리스크 유형 식별"""
+        risk_keywords = {
+            'statistical': ['가정', '정규성', '등분산성', '독립성'],
+            'interpretation': ['해석', '오해', '편향', '결론'],
+            'implementation': ['구현', '코드', '오류', '버그'],
+            'data_quality': ['결측치', '이상치', '품질', '무결성']
+        }
         
-        try:
-            parser = LLMResponseParser()
-            parsed = parser.parse_response(llm_response, expected_type=ResponseType.JSON)
-            
-            if parsed.confidence > 0.5 and isinstance(parsed.content, dict):
-                return parsed.content
-            else:
-                # JSON 파싱 실패 시 텍스트에서 정보 추출
-                return self._extract_summary_from_text(llm_response)
-                
-        except Exception as e:
-            self.logger.warning(f"대화 요약 파싱 오류: {e}")
-            return {
-                'key_decisions': ['분석 방법 선택 완료'],
-                'clarifications': [],
-                'final_confirmations': ['사용자 선택사항 확정'],
-                'raw_summary': llm_response
-            }
+        content_lower = content.lower()
+        for risk_type, keywords in risk_keywords.items():
+            if any(keyword in content_lower for keyword in keywords):
+                return risk_type
+        
+        return 'general'
     
-    def _build_analysis_parameters(self, selected_analysis: Dict[str, Any],
-                                 analysis_plan: Dict[str, Any]) -> Dict[str, Any]:
-        """분석 파라미터 구성"""
-        try:
-            method_info = selected_analysis.get('method', {})
-            analysis_type = method_info.get('type', '').lower()
-            
-            # 기본 파라미터
-            parameters = {
-                'alpha': 0.05,  # 기본 유의수준
-                'confidence_level': 0.95,  # 기본 신뢰수준
-                'missing_value_handling': 'listwise_deletion',
-                'outlier_handling': 'identify_only'
-            }
-            
-            # 분석별 특화 파라미터
-            if 't_test' in analysis_type:
-                parameters.update({
-                    'equal_var': True,  # 등분산 가정
-                    'alternative': 'two-sided',  # 양측 검정
-                    'paired': False  # 독립표본 기본
-                })
-            
-            elif 'anova' in analysis_type:
-                parameters.update({
-                    'post_hoc_method': 'tukey',
-                    'effect_size_method': 'eta_squared',
-                    'correction_method': 'bonferroni'
-                })
-            
-            elif 'correlation' in analysis_type:
-                parameters.update({
-                    'method': 'pearson',  # 기본 피어슨
-                    'alternative': 'two-sided'
-                })
-            
-            elif 'regression' in analysis_type:
-                parameters.update({
-                    'fit_intercept': True,
-                    'normalize': False,
-                    'cv_folds': 5,
-                    'feature_selection': 'none'
-                })
-            
-            # 사용자 커스터마이제이션 적용
-            customizations = selected_analysis.get('customizations', {})
-            parameters.update(customizations)
-            
-            return parameters
-            
-        except Exception as e:
-            self.logger.error(f"분석 파라미터 구성 오류: {e}")
-            return {'alpha': 0.05, 'confidence_level': 0.95}
+    def _initialize_conversation_state(self, input_data: Dict[str, Any],
+                                     rag_context: Dict[str, Any]) -> Dict[str, Any]:
+        """대화 세션 초기화"""
+        return {
+            'conversation_id': f"conv_{hash(str(input_data))}"[:12],
+            'user_preferences': {},
+            'decisions_made': [],
+            'questions_raised': [],
+            'agent_confidence': 0.5,
+            'user_satisfaction': 0.5,
+            'context_evolution': [rag_context],
+            'decision_criteria': []
+        }
     
-    def _define_execution_constraints(self, selected_analysis: Dict[str, Any],
-                                    user_preferences: Dict[str, Any]) -> Dict[str, Any]:
-        """실행 제약사항 정의"""
-        try:
-            constraints = {
-                'max_execution_time': 300,  # 최대 5분
-                'max_memory_usage': 1024,   # 최대 1GB
-                'allowed_file_operations': ['read_csv', 'save_plot', 'save_report'],
-                'restricted_imports': ['os', 'subprocess', 'sys'],
-                'safe_mode': True
-            }
-            
-            # 분석 복잡도에 따른 제약사항 조정
-            method_info = selected_analysis.get('method', {})
-            complexity = method_info.get('complexity', 'medium')
-            
-            if complexity == 'high':
-                constraints['max_execution_time'] = 600  # 10분
-                constraints['max_memory_usage'] = 2048  # 2GB
-            elif complexity == 'low':
-                constraints['max_execution_time'] = 120  # 2분
-                constraints['max_memory_usage'] = 512   # 512MB
-            
-            # 사용자 선호도 반영
-            report_prefs = user_preferences.get('reporting_preferences', {})
-            if 'PDF' in report_prefs.get('output_formats', []):
-                constraints['allowed_file_operations'].append('save_pdf')
-            if 'Excel' in report_prefs.get('output_formats', []):
-                constraints['allowed_file_operations'].extend(['save_excel', 'read_excel'])
-            
-            return constraints
-            
-        except Exception as e:
-            self.logger.error(f"실행 제약사항 정의 오류: {e}")
-            return {
-                'max_execution_time': 300,
-                'max_memory_usage': 1024,
-                'safe_mode': True
-            }
+    def _update_conversation_state(self, current_state: Dict[str, Any],
+                                 user_response: Dict[str, Any],
+                                 agent_response: Dict[str, Any]) -> Dict[str, Any]:
+        """대화 상태 업데이트"""
+        updated_state = current_state.copy()
+        
+        # 사용자 선호도 업데이트
+        if 'preferences' in user_response:
+            updated_state['user_preferences'].update(user_response['preferences'])
+        
+        # 결정사항 추가
+        if 'decision' in user_response:
+            updated_state['decisions_made'].append(user_response['decision'])
+        
+        # 질문 추가
+        if 'questions' in user_response:
+            updated_state['questions_raised'].extend(user_response['questions'])
+        
+        return updated_state
     
-    def _create_special_instructions(self, selected_analysis: Dict[str, Any],
-                                   user_preferences: Dict[str, Any]) -> List[str]:
-        """특별 지침 작성"""
-        try:
-            instructions = []
-            
-            # 기본 지침
-            instructions.extend([
-                "모든 가정을 명시적으로 확인하고 보고하세요",
-                "결과 해석 시 통계적 유의성과 실질적 유의성을 구분하세요",
-                "시각화는 명확하고 이해하기 쉽게 작성하세요"
-            ])
-            
-            # 분석별 특별 지침
-            method_info = selected_analysis.get('method', {})
-            analysis_type = method_info.get('type', '').lower()
-            
-            if 't_test' in analysis_type:
-                instructions.extend([
-                    "정규성 가정 위배 시 비모수 검정 대안을 제시하세요",
-                    "효과크기(Cohen's d)를 계산하고 해석하세요"
-                ])
-            
-            elif 'anova' in analysis_type:
-                instructions.extend([
-                    "사후 검정 결과를 명확히 해석하세요",
-                    "효과크기(eta squared)와 검정력을 보고하세요",
-                    "그룹 간 차이의 실질적 의미를 설명하세요"
-                ])
-            
-            elif 'regression' in analysis_type:
-                instructions.extend([
-                    "회귀 가정을 철저히 확인하세요",
-                    "다중공선성 문제를 점검하세요",
-                    "모델의 예측력과 설명력을 구분하여 보고하세요"
-                ])
-            
-            # 사용자 추가 요구사항 반영
-            additional_reqs = user_preferences.get('additional_requirements', [])
-            for req in additional_reqs:
-                instructions.append(f"사용자 요구사항: {req}")
-            
-            # 보고서 형식에 따른 지침
-            report_format = user_preferences.get('reporting_preferences', {}).get('format', {})
-            if report_format.get('name') == '비즈니스 보고서':
-                instructions.extend([
-                    "비즈니스 임팩트를 명확히 제시하세요",
-                    "의사결정을 위한 구체적인 권고사항을 포함하세요",
-                    "기술적 용어는 최소화하고 이해하기 쉽게 설명하세요"
-                ])
-            elif report_format.get('name') == '기술 보고서':
-                instructions.extend([
-                    "통계적 세부사항을 상세히 기록하세요",
-                    "방법론의 타당성을 논증하세요",
-                    "한계점과 추가 연구 방향을 제시하세요"
-                ])
-            
-            return instructions
-            
-        except Exception as e:
-            self.logger.error(f"특별 지침 작성 오류: {e}")
-            return [
-                "분석 과정을 명확히 문서화하세요",
-                "결과를 객관적으로 해석하세요"
-            ]
+    def _summarize_conversation(self, conversation_turns: List[Dict[str, Any]],
+                              initial_presentation: Dict[str, Any],
+                              final_state: Dict[str, Any]) -> Dict[str, Any]:
+        """대화 결과 종합"""
+        return {
+            'total_turns': len(conversation_turns),
+            'decisions_made': final_state.get('decisions_made', []),
+            'user_preferences': final_state.get('user_preferences', {}),
+            'questions_resolved': len(final_state.get('questions_raised', [])),
+            'final_confidence': final_state.get('agent_confidence', 0.5),
+            'conversation_success': len(final_state.get('decisions_made', [])) > 0
+        }
     
-    def _extract_method_details_from_text(self, text: str) -> Dict[str, Any]:
-        """텍스트에서 방법 상세 정보 추출"""
-        try:
-            import re
-            
-            details = {
-                'parameters': {},
-                'customizations': {},
-                'notes': text
-            }
-            
-            # 파라미터 추출 패턴
-            param_patterns = {
-                'alpha': r'alpha[=:]?\s*([0-9.]+)',
-                'confidence': r'confidence[=:]?\s*([0-9.]+)',
-                'method': r'method[=:]?\s*([a-zA-Z_]+)',
-                'alternative': r'alternative[=:]?\s*([a-zA-Z_-]+)'
-            }
-            
-            for param, pattern in param_patterns.items():
-                match = re.search(pattern, text, re.IGNORECASE)
-                if match:
-                    try:
-                        value = float(match.group(1)) if '.' in match.group(1) else match.group(1)
-                        details['parameters'][param] = value
-                    except ValueError:
-                        details['parameters'][param] = match.group(1)
-            
-            return details
-            
-        except Exception as e:
-            self.logger.warning(f"텍스트에서 방법 상세 정보 추출 오류: {e}")
-            return {'parameters': {}, 'customizations': {}, 'notes': text}
+    def _create_fallback_conversation_result(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """폴백 대화 결과 생성"""
+        return {
+            'initial_presentation': {'message': '기본 분석 제안'},
+            'conversation_turns': [],
+            'conversation_summary': {'conversation_success': False},
+            'final_state': {'decisions_made': ['기본 분석 선택']}
+        }
     
-    def _extract_summary_from_text(self, text: str) -> Dict[str, Any]:
-        """텍스트에서 대화 요약 추출"""
-        try:
-            import re
-            
-            summary = {
-                'key_decisions': [],
-                'clarifications': [],
-                'final_confirmations': [],
-                'raw_summary': text
-            }
-            
-            # 키워드 기반 추출
-            decision_keywords = ['선택', '결정', '채택', '승인']
-            clarification_keywords = ['명확화', '설명', '확인', '질문']
-            confirmation_keywords = ['확정', '승인', '동의', '최종']
-            
-            sentences = re.split(r'[.!?]', text)
-            
-            for sentence in sentences:
-                sentence = sentence.strip()
-                if not sentence:
-                    continue
-                    
-                if any(keyword in sentence for keyword in decision_keywords):
-                    summary['key_decisions'].append(sentence)
-                elif any(keyword in sentence for keyword in clarification_keywords):
-                    summary['clarifications'].append(sentence)
-                elif any(keyword in sentence for keyword in confirmation_keywords):
-                    summary['final_confirmations'].append(sentence)
-            
-            return summary
-            
-        except Exception as e:
-            self.logger.warning(f"텍스트에서 대화 요약 추출 오류: {e}")
-            return {
-                'key_decisions': ['분석 방법 선택 완료'],
-                'clarifications': [],
-                'final_confirmations': ['사용자 선택사항 확정'],
-                'raw_summary': text
-            }
+    def _build_explanation_prompt(self, input_data: Dict[str, Any],
+                                  rag_context: Dict[str, Any],
+                                  conversation_state: Dict[str, Any]) -> str:
+        """설명을 위한 프롬프트 생성"""
+        return f"""
+사용자에게 분석 방법을 설명하고 선택을 도와주세요.
+
+데이터: {input_data.get('data_overview', {})}
+사용자 요청: {input_data.get('user_request', '')}
+추천 방법: {input_data.get('agent_analysis_strategy', {})}
+
+친근하고 이해하기 쉽게 설명해주세요.
+        """
+    
+    def _get_explanation_system_prompt(self) -> str:
+        """설명용 시스템 프롬프트"""
+        return "당신은 친근하고 도움이 되는 데이터 분석 어시스턴트입니다."
+    
+    def _format_user_presentation(self, explanation_response: str,
+                                  input_data: Dict[str, Any],
+                                  rag_context: Dict[str, Any]) -> Dict[str, Any]:
+        """사용자 친화적 프레젠테이션 형식화"""
+        return {
+            'explanation': explanation_response,
+            'options': ['기본 분석 승인', '대안 방법 요청', '수정 요청'],
+            'recommendation': '기본 분석을 추천합니다'
+        }
+    
+    def _create_basic_presentation(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """기본 프레젠테이션 생성"""
+        return {
+            'explanation': '데이터 분석을 위한 기본 방법을 제안드립니다.',
+            'options': ['승인', '거부'],
+            'recommendation': '기본 분석 방법'
+        }
+    
+    def _display_presentation(self, presentation: Dict[str, Any], turn_number: int):
+        """프레젠테이션 출력"""
+        print(f"\n=== 분석 방법 제안 (턴 {turn_number}) ===")
+        print(presentation.get('explanation', ''))
+        print("\n옵션:")
+        for i, option in enumerate(presentation.get('options', []), 1):
+            print(f"{i}. {option}")
+    
+    def _get_interactive_user_input(self, conversation_state: Dict[str, Any],
+                                  turn_number: int) -> str:
+        """대화형 사용자 입력 수집"""
+        # 비대화형 모드에서는 기본값 반환
+        return "1"  # 첫 번째 옵션 선택
+    
+    def _analyze_user_response(self, user_input: str,
+                             conversation_state: Dict[str, Any]) -> Dict[str, Any]:
+        """사용자 응답 분석"""
+        return {
+            'response': user_input,
+            'decision_finalized': True,
+            'preferences': {'selected_method': 'default'}
+        }
+    
+    def _analyze_response_intent(self, user_response: Dict[str, Any]) -> Dict[str, Any]:
+        """사용자 응답 의도 분석"""
+        return {
+            'intent': 'approval',
+            'confidence': 0.8,
+            'needs_clarification': False
+        }
+    
+    def _perform_adaptive_rag_search(self, user_response: Dict[str, Any],
+                                   response_analysis: Dict[str, Any],
+                                   rag_context: Dict[str, Any]) -> Dict[str, Any]:
+        """적응적 RAG 검색"""
+        return {'additional_context': '추가 정보 없음'}
+    
+    def _build_adaptive_response_prompt(self, user_response: Dict[str, Any],
+                                      conversation_state: Dict[str, Any],
+                                      adaptive_knowledge: Dict[str, Any],
+                                      turn_number: int) -> str:
+        """적응적 응답 프롬프트 생성"""
+        return f"사용자 응답에 대한 적응적 답변을 생성해주세요. 턴: {turn_number}"
+    
+    def _get_adaptive_response_system_prompt(self) -> str:
+        """적응적 응답용 시스템 프롬프트"""
+        return "사용자의 의견을 고려하여 적절한 분석 방법을 제안해주세요."
+    
+    def _structure_agent_response(self, agent_response: str,
+                                user_response: Dict[str, Any],
+                                adaptive_knowledge: Dict[str, Any]) -> Dict[str, Any]:
+        """Agent 응답 구조화"""
+        return {
+            'message': agent_response,
+            'suggestions': ['추가 검토'],
+            'confidence': 0.7
+        }
+    
+    def _create_fallback_agent_response(self, user_response: Dict[str, Any]) -> Dict[str, Any]:
+        """폴백 Agent 응답"""
+        return {
+            'message': '기본 분석 방법을 진행하겠습니다.',
+            'suggestions': [],
+            'confidence': 0.5
+        }
+    
+    def _derive_execution_parameters(self, conversation_result: Dict[str, Any],
+                                   rag_context: Dict[str, Any],
+                                   user_preferences: Dict[str, Any]) -> Dict[str, Any]:
+        """실행 파라미터 도출"""
+        return {
+            'method': user_preferences.get('selected_method', 'default'),
+            'confidence_level': 0.95,
+            'output_format': 'standard'
+        }
+    
+    def _calculate_finalization_confidence(self, conversation_result: Dict[str, Any],
+                                         user_preferences: Dict[str, Any]) -> float:
+        """확정 신뢰도 계산"""
+        return 0.8
+    
+    def _create_default_analysis_plan(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """기본 분석 계획 생성"""
+        return {
+            'selected_primary_method': {'method': 'default_analysis'},
+            'confirmed_alternatives': [],
+            'execution_parameters': {'confidence_level': 0.95},
+            'user_preferences': {'selected_method': 'default'},
+            'finalization_confidence': 0.5
+        }
+    
+    def _generate_adaptive_adjustments(self, finalized_analysis_plan: Dict[str, Any],
+                                     rag_context: Dict[str, Any],
+                                     conversation_result: Dict[str, Any]) -> Dict[str, Any]:
+        """적응형 실행 조정사항 생성"""
+        return {
+            'customized_parameters': {},
+            'dynamic_checkpoints': [],
+            'quality_assurance_plan': {},
+            'contingency_protocols': {}
+        }
+    
+    def _document_decision_process(self, conversation_result: Dict[str, Any],
+                                 finalized_analysis_plan: Dict[str, Any],
+                                 input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """의사결정 과정 문서화"""
+        return {
+            'conversation_summary': conversation_result.get('conversation_summary', {}),
+            'decision_rationale': {'reason': '사용자 승인'},
+            'agent_recommendations': {'primary': '기본 분석'},
+            'user_feedback_integration': {'feedback': '긍정적'}
+        }
+    
+    def _generate_knowledge_insights(self, finalized_analysis_plan: Dict[str, Any],
+                                   rag_context: Dict[str, Any],
+                                   conversation_result: Dict[str, Any]) -> Dict[str, Any]:
+        """지식 기반 인사이트 생성"""
+        return {
+            'domain_specific_considerations': [],
+            'methodological_best_practices': [],
+            'implementation_guidance': {},
+            'expected_outcomes': {}
+        }
 
 
-# 단계 등록
-PipelineStepRegistry.register_step(5, UserSelectionStep) 

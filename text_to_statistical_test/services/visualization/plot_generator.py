@@ -277,20 +277,20 @@ class PlotGenerator:
     
     def _create_correlation_matrix(self, data: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
         """상관관계 매트릭스 히트맵 생성"""
-        numeric_columns = data.select_dtypes(include=[np.number]).columns
-        columns = config.get('columns', numeric_columns)
+        numeric_cols = data.select_dtypes(include=[np.number]).columns
         
-        if len(columns) < 2:
-            raise ValueError("상관관계 분석을 위해 최소 2개의 숫자형 변수가 필요합니다")
+        if len(numeric_cols) < 2:
+            raise ValueError("상관관계 분석을 위해서는 최소 2개의 숫자형 변수가 필요합니다.")
         
-        corr_matrix = data[columns].corr()
+        # 상관관계 계산
+        corr_matrix = data[numeric_cols].corr()
         
-        fig, ax = plt.subplots(figsize=(max(8, len(columns)), max(6, len(columns))))
+        fig, ax = plt.subplots(figsize=self.figure_size)
         
         # 히트맵 생성
         mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
         sns.heatmap(corr_matrix, 
-                   mask=mask if config.get('mask_upper', True) else None,
+                   mask=mask if config.get('show_upper_triangle', False) else None,
                    annot=True, 
                    cmap='coolwarm', 
                    center=0,
@@ -300,10 +300,81 @@ class PlotGenerator:
         ax.set_title('Correlation Matrix')
         plt.tight_layout()
         
+        # 강한 상관관계 찾기
+        strong_correlations = self._find_strongest_correlations(corr_matrix)
+        
         return {
             'figure': fig,
-            'correlation_matrix': corr_matrix.to_dict(),
-            'strongest_correlations': self._find_strongest_correlations(corr_matrix),
+            'correlation_matrix': corr_matrix,
+            'strong_correlations': strong_correlations,
+            'success': True
+        }
+
+    def _create_pairplot(self, data: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+        """페어플롯 생성"""
+        numeric_cols = data.select_dtypes(include=[np.number]).columns
+        
+        if len(numeric_cols) < 2:
+            raise ValueError("페어플롯을 위해서는 최소 2개의 숫자형 변수가 필요합니다.")
+        
+        # 변수 개수 제한 (성능상 이유)
+        max_vars = config.get('max_variables', 5)
+        if len(numeric_cols) > max_vars:
+            numeric_cols = numeric_cols[:max_vars]
+            
+        # 색상 구분 변수
+        hue_col = config.get('hue_column')
+        
+        try:
+            # 페어플롯 생성
+            if hue_col and hue_col in data.columns:
+                g = sns.pairplot(data[list(numeric_cols) + [hue_col]], 
+                               hue=hue_col, 
+                               diag_kind='hist',
+                               plot_kws={'alpha': 0.6})
+            else:
+                g = sns.pairplot(data[numeric_cols], 
+                               diag_kind='hist',
+                               plot_kws={'alpha': 0.6})
+            
+            g.fig.suptitle('Pairwise Relationships', y=1.02)
+            
+            return {
+                'figure': g.fig,
+                'variables_used': list(numeric_cols),
+                'hue_variable': hue_col,
+                'success': True
+            }
+            
+        except Exception as e:
+            self.logger.error(f"페어플롯 생성 오류: {e}")
+            # 대안으로 간단한 산점도 매트릭스 생성
+            return self._create_simple_scatter_matrix(data[numeric_cols])
+
+    def _create_simple_scatter_matrix(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """간단한 산점도 매트릭스 생성 (페어플롯 대안)"""
+        n_vars = len(data.columns)
+        fig, axes = plt.subplots(n_vars, n_vars, figsize=(12, 12))
+        
+        for i, col1 in enumerate(data.columns):
+            for j, col2 in enumerate(data.columns):
+                ax = axes[i, j] if n_vars > 1 else axes
+                
+                if i == j:
+                    # 대각선: 히스토그램
+                    ax.hist(data[col1].dropna(), bins=20, alpha=0.7)
+                    ax.set_title(col1)
+                else:
+                    # 비대각선: 산점도
+                    ax.scatter(data[col2], data[col1], alpha=0.6)
+                    ax.set_xlabel(col2)
+                    ax.set_ylabel(col1)
+        
+        plt.tight_layout()
+        
+        return {
+            'figure': fig,
+            'variables_used': list(data.columns),
             'success': True
         }
     
@@ -709,4 +780,199 @@ class PlotGenerator:
             'required_config': [],
             'optional_config': [],
             'data_requirements': 'varies by plot type'
-        }) 
+        })
+
+    def _create_distribution_comparison(self, data: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+        """분포 비교 플롯 생성"""
+        columns = config.get('columns', [])
+        if not columns:
+            columns = data.select_dtypes(include=[np.number]).columns[:3]
+        
+        fig, ax = plt.subplots(figsize=self.figure_size)
+        
+        for col in columns:
+            if col in data.columns:
+                ax.hist(data[col].dropna(), alpha=0.6, label=col, bins=30)
+        
+        ax.set_xlabel('Value')
+        ax.set_ylabel('Frequency')
+        ax.set_title('Distribution Comparison')
+        ax.legend()
+        plt.tight_layout()
+        
+        return {
+            'figure': fig,
+            'columns_compared': list(columns),
+            'success': True
+        }
+
+    def _create_probability_plot(self, data: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+        """확률 플롯 생성"""
+        column = config.get('column')
+        if not column or column not in data.columns:
+            raise ValueError("유효한 컬럼을 지정해야 합니다.")
+        
+        fig, ax = plt.subplots(figsize=self.figure_size)
+        
+        # Q-Q 플롯
+        stats.probplot(data[column].dropna(), dist="norm", plot=ax)
+        ax.set_title(f'Probability Plot: {column}')
+        plt.tight_layout()
+        
+        return {
+            'figure': fig,
+            'column': column,
+            'success': True
+        }
+
+    def _create_density_plot(self, data: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+        """밀도 플롯 생성"""
+        column = config.get('column')
+        if not column or column not in data.columns:
+            raise ValueError("유효한 컬럼을 지정해야 합니다.")
+        
+        fig, ax = plt.subplots(figsize=self.figure_size)
+        
+        # 밀도 플롯
+        data[column].dropna().plot.density(ax=ax)
+        ax.set_title(f'Density Plot: {column}')
+        ax.set_xlabel(column)
+        ax.set_ylabel('Density')
+        plt.tight_layout()
+        
+        return {
+            'figure': fig,
+            'column': column,
+            'success': True
+        }
+
+    def _create_power_analysis_plot(self, data: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+        """검정력 분석 플롯 생성"""
+        effect_sizes = np.arange(0.1, 2.0, 0.1)
+        sample_sizes = config.get('sample_sizes', [10, 20, 30, 50, 100])
+        alpha = config.get('alpha', 0.05)
+        
+        fig, ax = plt.subplots(figsize=self.figure_size)
+        
+        for n in sample_sizes:
+            powers = []
+            for effect_size in effect_sizes:
+                # 간단한 검정력 계산 (t-test 기준)
+                power = 1 - stats.t.cdf(stats.t.ppf(1-alpha/2, n-1), n-1, effect_size*np.sqrt(n))
+                powers.append(power)
+            
+            ax.plot(effect_sizes, powers, label=f'n={n}')
+        
+        ax.set_xlabel('Effect Size')
+        ax.set_ylabel('Power')
+        ax.set_title('Power Analysis')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        return {
+            'figure': fig,
+            'sample_sizes': sample_sizes,
+            'alpha': alpha,
+            'success': True
+        }
+
+    def _create_effect_size_plot(self, data: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+        """효과 크기 플롯 생성"""
+        group_col = config.get('group_column')
+        value_col = config.get('value_column')
+        
+        if not group_col or not value_col:
+            raise ValueError("그룹 컬럼과 값 컬럼을 지정해야 합니다.")
+        
+        fig, ax = plt.subplots(figsize=self.figure_size)
+        
+        groups = data[group_col].unique()
+        if len(groups) == 2:
+            # Cohen's d 계산
+            group1 = data[data[group_col] == groups[0]][value_col]
+            group2 = data[data[group_col] == groups[1]][value_col]
+            
+            pooled_std = np.sqrt(((len(group1)-1)*group1.var() + (len(group2)-1)*group2.var()) / (len(group1)+len(group2)-2))
+            cohens_d = (group1.mean() - group2.mean()) / pooled_std
+            
+            # 효과 크기 시각화
+            ax.bar(['Cohen\'s d'], [abs(cohens_d)])
+            ax.set_ylabel('Effect Size')
+            ax.set_title(f'Effect Size: {cohens_d:.3f}')
+            
+            # 해석 기준선
+            ax.axhline(y=0.2, color='green', linestyle='--', alpha=0.7, label='Small (0.2)')
+            ax.axhline(y=0.5, color='orange', linestyle='--', alpha=0.7, label='Medium (0.5)')
+            ax.axhline(y=0.8, color='red', linestyle='--', alpha=0.7, label='Large (0.8)')
+            ax.legend()
+        
+        plt.tight_layout()
+        
+        return {
+            'figure': fig,
+            'effect_size': cohens_d if len(groups) == 2 else None,
+            'success': True
+        }
+
+    def _create_interactive_histogram(self, data: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+        """대화형 히스토그램 생성 (plotly 사용)"""
+        column = config.get('column')
+        if not column or column not in data.columns:
+            raise ValueError("유효한 컬럼을 지정해야 합니다.")
+        
+        try:
+            import plotly.graph_objects as go
+            
+            fig = go.Figure(data=[go.Histogram(x=data[column].dropna(), name=column)])
+            fig.update_layout(
+                title=f'Interactive Histogram: {column}',
+                xaxis_title=column,
+                yaxis_title='Frequency'
+            )
+            
+            return {
+                'figure': fig,
+                'column': column,
+                'interactive': True,
+                'success': True
+            }
+        except ImportError:
+            # plotly가 없으면 일반 히스토그램으로 대체
+            return self._create_histogram(data, config)
+
+    def _create_interactive_boxplot(self, data: pd.DataFrame, config: Dict[str, Any]) -> Dict[str, Any]:
+        """대화형 박스플롯 생성 (plotly 사용)"""
+        x_col = config.get('x_column')
+        y_col = config.get('y_column')
+        
+        try:
+            import plotly.graph_objects as go
+            
+            if x_col and y_col:
+                fig = go.Figure()
+                for group in data[x_col].unique():
+                    group_data = data[data[x_col] == group][y_col]
+                    fig.add_trace(go.Box(y=group_data, name=str(group)))
+                
+                fig.update_layout(
+                    title=f'Interactive Box Plot: {y_col} by {x_col}',
+                    xaxis_title=x_col,
+                    yaxis_title=y_col
+                )
+            else:
+                column = y_col or x_col
+                fig = go.Figure(data=[go.Box(y=data[column].dropna(), name=column)])
+                fig.update_layout(
+                    title=f'Interactive Box Plot: {column}',
+                    yaxis_title=column
+                )
+            
+            return {
+                'figure': fig,
+                'interactive': True,
+                'success': True
+            }
+        except ImportError:
+            # plotly가 없으면 일반 박스플롯으로 대체
+            return self._create_boxplot(data, config) 

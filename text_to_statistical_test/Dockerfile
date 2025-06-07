@@ -1,104 +1,92 @@
 # =============================================================================
-# Multi-stage build for Text-to-Statistical-Test
-# 보안: API 키 등 민감 정보는 빌드 시점에 포함하지 않음
+# Multi-stage Docker build for Text-to-Statistical-Test
 # =============================================================================
 
-# Builder stage - 의존성 설치
+# 1. Builder Stage: Install dependencies
+# -----------------------------------------------------------------------------
 FROM python:3.11-slim as builder
 
-# Poetry 환경 설정
-ENV POETRY_VERSION=1.8.3
+# Set up Poetry environment
+ENV POETRY_VERSION=1.8.2
 ENV POETRY_HOME="/opt/poetry"
-ENV POETRY_CACHE_DIR=/tmp/poetry_cache
+ENV POETRY_VENV_IN_PROJECT=true
 ENV POETRY_NO_INTERACTION=1
-ENV POETRY_VENV_IN_PROJECT=1
+ENV PATH="$POETRY_HOME/bin:$PATH"
 
-# 시스템 의존성 설치
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+# Install Poetry
+RUN pip install "poetry==$POETRY_VERSION"
 
-# Poetry 설치
-RUN pip install poetry==$POETRY_VERSION
-
-# 작업 디렉토리 설정
+# Set working directory
 WORKDIR /app
 
-# Poetry 설정 파일 복사
+# Copy dependency definition files
 COPY pyproject.toml poetry.lock ./
 
-# 의존성 설치 (개발 의존성 제외)
-RUN poetry config virtualenvs.create true && \
-    poetry config virtualenvs.in-project true && \
-    poetry install --only=main --no-root && \
-    rm -rf $POETRY_CACHE_DIR
+# Install only production dependencies
+# This creates a .venv directory in /app
+RUN poetry install --no-root --no-dev
 
-# =============================================================================
-# Production stage - 실행 환경
-# =============================================================================
-FROM python:3.11-slim as production
 
-# 파이썬 환경 변수
+# 2. Final Stage: Create the production image
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim as final
+
+# Set environment variables for Python
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONPATH=/app
 ENV PATH="/app/.venv/bin:$PATH"
 
-# 애플리케이션 기본 설정 (민감하지 않은 정보만)
-ENV ENVIRONMENT=production
-ENV LOG_LEVEL=INFO
-ENV DEBUG=false
-
-# 런타임 시스템 의존성 설치
-RUN apt-get update && apt-get install -y \
-    libgomp1 \
-    libopenblas-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# 비root 사용자 생성
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
-# 작업 디렉토리 설정
+# Set working directory
 WORKDIR /app
 
-# 가상환경을 builder에서 복사
-COPY --from=builder /app/.venv /app/.venv
+# Create a non-root user for security
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
-# 애플리케이션 코드 복사 (민감한 파일 제외)
-COPY --chown=appuser:appuser . .
+# Copy virtual environment from builder stage
+COPY --from=builder /app/.venv ./.venv
 
-# 민감한 파일들 제거 (혹시 복사되었다면)
-RUN rm -f .env .env.* *.key *.pem
+# Copy application source code
+COPY --chown=appuser:appgroup . .
 
-# 필요한 디렉토리 생성
-RUN mkdir -p \
-    input_data/data_files \
-    input_data/metadata \
-    output_data/reports \
-    output_data/visualizations \
-    output_data/analysis_cache \
-    logs \
-    resources/knowledge_base \
-    && chown -R appuser:appuser /app
+# Create necessary directories and set permissions
+# Ensures the app can write reports and logs
+RUN mkdir -p output_data/reports output_data/visualizations logs && \
+    chown -R appuser:appgroup output_data logs
 
-# 비root 사용자로 전환
+# Switch to the non-root user
 USER appuser
 
-# 포트 노출 (향후 웹 인터페이스용)
-EXPOSE 8000
-
-# 헬스체크
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; print('Health check passed'); sys.exit(0)"
-
-# 기본 명령어 (도움말 표시)
-CMD ["python", "main.py", "--help"]
+# Entrypoint to run the application
+# Expects a .env file to be mounted or environment variables to be provided at runtime.
+# Example: python main.py --file 'input_data/data_files/sample_data.csv' --request 'Compare sales between Group A and Group B'
+CMD ["python", "main.py"]
 
 # 메타데이터 라벨
 LABEL maintainer="wesley"
 LABEL version="1.0.0"
 LABEL description="RAG 기반 Agentic AI 통계 분석 시스템"
-LABEL security.note="민감한 정보는 런타임 환경변수로 주입하세요" 
+LABEL security.note="민감한 정보는 런타임 환경변수로 주입하세요"
+
+# Use an official Python runtime as a parent image
+FROM python:3.11-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the pyproject.toml and poetry.lock files into the container
+# We copy these first to leverage Docker's layer caching.
+COPY pyproject.toml poetry.lock* /app/
+
+# Install poetry
+RUN pip install poetry
+
+# Install project dependencies
+# --no-root: Don't install the project itself, only its dependencies
+# This is useful for creating a runtime environment for the sandbox
+RUN poetry install --no-root
+
+# The sandbox doesn't need the project source code, only the installed libraries.
+# The code to be executed will be mounted dynamically into the container.
+
+# This command is not strictly necessary for the sandbox, but can be useful for debugging.
+CMD ["python", "--version"] 

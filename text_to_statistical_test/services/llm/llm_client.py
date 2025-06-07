@@ -3,36 +3,61 @@
 import os
 import logging
 from typing import Dict, Any
-from openai import OpenAI, APIError, AuthenticationError, APITimeoutError
+from openai import OpenAI, APIError, AuthenticationError, APITimeoutError, AsyncOpenAI
+from functools import lru_cache
+import threading
 
-# [UTIL-REQ] error_handler.py의 LLMException, ErrorCode 클래스가 필요합니다.
-from utils.error_handler import LLMException, ErrorCode
+from config.settings import get_settings
+from utils import LLMException
+from utils.error_handler import ErrorCode
 
 logger = logging.getLogger(__name__)
 
+@lru_cache(maxsize=1)
+def get_llm_client() -> "LLMClient":
+    """LLMClient의 싱글턴 인스턴스를 반환합니다."""
+    return LLMClient()
+
 class LLMClient:
     """
-    LLM API와의 통신을 담당하는 저수준 클라이언트.
-    OpenAI API를 기준으로 작성되었습니다.
+    OpenAI API와의 통신을 관리하는 클라이언트 클래스.
+    API 키 관리, 동기/비동기 클라이언트 제공, 기본 모델 설정 등을 담당합니다.
     """
-    def __init__(self):
-        """LLM 클라이언트 초기화 및 API 키 로드"""
-        try:
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                raise ValueError("OPENAI_API_KEY 환경 변수가 설정되지 않았습니다.")
-            
-            self.client = OpenAI(api_key=api_key)
-            logger.info("OpenAI 클라이언트가 성공적으로 초기화되었습니다.")
-            
-        except Exception as e:
-            logger.error(f"OpenAI 클라이언트 초기화 실패: {e}")
-            raise LLMException(
-                "LLM 클라이언트 초기화에 실패했습니다. API 키 설정을 확인하세요.",
-                error_code=ErrorCode.CONFIGURATION_ERROR
-            ) from e
+    _instance = None
+    _lock = threading.Lock()
 
-    def generate_completion(self,
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            with cls._lock:
+                if not cls._instance:
+                    cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        # 중복 초기화를 방지합니다.
+        if hasattr(self, '_initialized') and self._initialized:
+            return
+            
+        settings = get_settings()
+        self.api_key = settings.llm.openai_api_key
+        if not self.api_key:
+            raise LLMException("OPENAI_API_KEY가 설정되지 않았습니다. .env 파일을 확인해주세요.")
+        
+        self.default_model = settings.llm.default_model
+        self._sync_client = OpenAI(api_key=self.api_key)
+        self._async_client = AsyncOpenAI(api_key=self.api_key)
+        self._initialized = True
+        logger.info("LLMClient initialized successfully.")
+
+    @property
+    def sync_client(self) -> OpenAI:
+        return self._sync_client
+
+    @property
+    def async_client(self) -> AsyncOpenAI:
+        return self._async_client
+
+    async def generate_completion(self,
                             prompt: str,
                             system_prompt: str = "당신은 유능한 AI 어시스턴트입니다.",
                             model: str = "gpt-4o",
@@ -40,7 +65,7 @@ class LLMClient:
                             temperature: float = 0.3,
                             is_json: bool = False) -> str:
         """
-        주어진 프롬프트를 사용하여 LLM으로부터 텍스트 응답을 생성합니다.
+        주어진 프롬프트를 사용하여 LLM으로부터 텍스트 응답을 생성합니다. (비동기)
 
         Args:
             prompt: 사용자 요청이 포함된 주 프롬프트.
@@ -57,7 +82,7 @@ class LLMClient:
         try:
             response_format = {"type": "json_object"} if is_json else {"type": "text"}
             
-            response = self.client.chat.completions.create(
+            response = await self._async_client.chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},

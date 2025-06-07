@@ -1,71 +1,123 @@
 # 파일명: core/pipeline/autonomous_analysis_step.py
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+import pandas as pd
 
-from .base_pipeline_step import BasePipelineStep
-from services.llm.llm_service import LLMService
-from services.statistics.stats_service import StatisticsService
+from core.agent.autonomous_agent import AutonomousAgent
+from core.context import AppContext
+from core.pipeline.pipeline_step import PipelineStep
+from services import rag_service, llm_service
 
-logger = logging.getLogger(__name__)
-
-class AutonomousAnalysisStep(BasePipelineStep):
-    """3단계: AI Agent의 자율적 통계 분석 실행"""
+class AutonomousAnalysisStep(PipelineStep):
+    """3단계: AI Agent의 자율적 통계 분석 실행 (RAG 연동)"""
+    
     def __init__(self):
-        super().__init__("자율 통계 분석", 3)
-        self.llm_service = LLMService()
-        self.stats_service = StatisticsService()
+        super().__init__("자율 통계 분석")
+        self.logger = logging.getLogger(__name__)
+        self.llm_service = llm_service
+        self.rag_service = rag_service
 
-    def validate_input(self, input_data: Dict[str, Any]) -> bool:
-        return 'data_object' in input_data and 'structured_request' in input_data
+    async def run(self, context: AppContext) -> AppContext:
+        """
+        사용자 요청을 구조화하고, RAG로 지식을 보강한 뒤, AI Agent를 통해 분석을 수행합니다.
+        결과는 context 객체에 직접 추가됩니다.
+        
+        Args:
+            context: 'dataframe', 'user_request' 키가 포함된 AppContext 객체.
+        """
+        df = context.dataframe
+        user_request = context.user_request
 
-    def get_expected_output_schema(self) -> Dict[str, Any]:
-        return {'analysis_results': dict, 'final_plan': dict}
+        if not isinstance(df, pd.DataFrame) or not user_request:
+             raise ValueError("AutonomousAnalysisStep: 'dataframe' 또는 'user_request'가 컨텍스트에 없습니다.")
 
-    def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """사용자 요청에 따라 통계 분석의 전 과정을 자율적으로 수행합니다."""
-        df = input_data['data_object']
-        request = input_data['structured_request']
-        
-        self.logger.info("자율 분석 프로세스를 시작합니다.")
+        # 0. 사용자 자연어 요청을 구조화된 요청으로 변환 (누락된 기능 추가)
+        self.logger.info("사용자 요청을 구조화된 분석 목표로 변환합니다...")
+        structured_request = await self.llm_service.structure_user_request(
+            user_request=user_request,
+            dataframe=df
+        )
+        context.structured_request = structured_request # 컨텍스트에 저장
+        self.logger.info(f"구조화된 요청 생성 완료: {structured_request}")
 
-        # [SERVICE-REQ] llm_service.py에 create_detailed_analysis_plan 구현 필요
-        # LLM이 요청과 데이터 특성을 보고 분석에 필요한 모든 절차(가정, 본검정, 대안, 사후검정)가 포함된 계획을 수립
-        final_plan = self.llm_service.create_detailed_analysis_plan(request)
-        logger.info(f"AI Agent가 수립한 분석 계획: {final_plan}")
+        # 1. RAG를 통한 지식 검색 및 보강
+        self.logger.info("RAG를 통해 관련 지식을 검색합니다...")
+        retrieved_knowledge_text, retrieved_knowledge_raw = self._retrieve_knowledge(structured_request)
         
-        # [SERVICE-REQ] statistics_service.py에 check_assumptions 구현 필요
-        assumption_results = self.stats_service.check_assumptions(df, final_plan.get('assumptions', []))
-        logger.info(f"사전 가정 검토 결과: {assumption_results}")
+        self.logger.info("자율 분석 Agent를 초기화하고 실행합니다.")
         
-        executed_test_name = final_plan['primary_test']
-        # 가정 검토 결과에 따른 동적 분석 방법 결정
-        if not all(result.get('passed', True) for result in assumption_results.values()):
-            if final_plan.get('fallback_test'):
-                executed_test_name = final_plan['fallback_test']
-                logger.info(f"하나 이상의 가정을 충족하지 못하여 대안 분석('{executed_test_name}')을 실행합니다.")
-            else:
-                logger.warning("가정을 충족하지 못했으나, 대안 분석이 계획에 없어 기본 분석을 강행합니다.")
+        # Agent 실행에 필요한 모든 정보를 context에서 전달
+        agent = AutonomousAgent(llm_service=self.llm_service)
         
-        logger.info(f"핵심 분석 '{executed_test_name}'을 실행합니다.")
-        # [SERVICE-REQ] statistics_service.py에 run_test 구현 필요
-        main_test_results = self.stats_service.run_test(df, executed_test_name, request['variables'])
+        try:
+            analysis_results = await agent.run_analysis(
+                dataframe=df,
+                structured_request=structured_request,
+                knowledge_context=retrieved_knowledge_text  # 보강된 지식을 전달
+            )
+        except Exception as e:
+            self.logger.error("Autonomous Agent 실행 중 오류 발생.", exc_info=True)
+            raise RuntimeError("자율 분석 단계에서 심각한 오류가 발생했습니다.") from e
 
-        # [SERVICE-REQ] statistics_service.py에 calculate_effect_size 구현 필요
-        effect_size = self.stats_service.calculate_effect_size(df, main_test_results, final_plan.get('effect_size_method'))
-        
-        posthoc_results = None
-        if final_plan.get('posthoc_needed') and main_test_results.get('p_value', 1.0) < 0.05:
-            logger.info("유의한 결과에 따라 사후 검정을 실행합니다.")
-            # [SERVICE-REQ] statistics_service.py에 run_posthoc_test 구현 필요
-            posthoc_results = self.stats_service.run_posthoc_test(df, main_test_results)
+        if not analysis_results:
+            self.logger.error("Agent가 분석 결과를 반환하지 않았습니다.")
+            raise ValueError("자율 분석이 실패했거나 결과를 생성하지 못했습니다.")
 
-        analysis_results = {
-            'assumption_results': assumption_results,
-            'main_test': {'name': executed_test_name, **main_test_results},
-            'effect_size': effect_size,
-            'posthoc_test': posthoc_results
-        }
+        self.logger.info("Agent 기반 자율 분석을 성공적으로 완료했습니다.")
         
-        input_data.update({'analysis_results': analysis_results, 'final_plan': final_plan})
-        return input_data
+        # Agent가 반환하는 포괄적인 결과 객체를 컨텍스트에 분해하여 저장합니다.
+        context.analysis_plan = analysis_results.get("analysis_plan")
+        context.execution_results = analysis_results.get("execution_results")
+        context.final_summary = analysis_results.get("final_summary")
+        context.retrieved_knowledge_text = retrieved_knowledge_text
+        context.retrieved_knowledge_raw = retrieved_knowledge_raw
+
+        # 시각화 파일 경로가 결과에 있는지 확인하고 추출합니다.
+        execution_results = context.execution_results or []
+        viz_paths = [
+            item['output']
+            for item in execution_results
+            if item.get('tool_name') == 'create_visualization' and item.get('status') == 'SUCCESS'
+        ]
+        context.visualization_paths = viz_paths
+
+        final_summary_title = (context.final_summary or {}).get('title', 'N/A')
+        self.logger.info(f"자율 분석 완료. 최종 요약 제목: {final_summary_title}")
+        
+        return context
+
+    def _retrieve_knowledge(self, structured_request: Dict[str, Any]) -> tuple[str, list[dict]]:
+        """구조화된 요청을 바탕으로 RAG 서비스에서 관련 지식을 검색합니다."""
+        # 검색 쿼리를 생성 (요청의 핵심 내용을 조합)
+        query = f"{structured_request.get('question', '')} " \
+                f"분석 유형: {structured_request.get('analysis_type', '')} " \
+                f"변수: {', '.join(structured_request.get('variables', []))}"
+        
+        self.logger.debug(f"RAG 검색 쿼리: {query}")
+        
+        try:
+            # 여기서는 모든 컬렉션을 대상으로 검색
+            search_results = self.rag_service.search(query, top_k=5, collection=None)
+            
+            if not search_results:
+                self.logger.warning("RAG 검색 결과가 없습니다.")
+                return "", []
+
+            context_text = self.rag_service.build_context_from_results(search_results)
+            return context_text, search_results
+
+        except Exception as e:
+            self.logger.error(f"RAG 검색 중 오류 발생: {e}", exc_info=True)
+            # RAG가 실패해도 분석은 계속될 수 있도록 빈 컨텍스트 반환
+            return "", []
+
+    def _extract_summary_from_results(self, results: list[dict]) -> Dict[str, Any]:
+        # 이 메서드는 분석 결과를 기반으로 분석 요약을 추출하는 로직을 구현해야 합니다.
+        # 현재는 임시로 빈 딕셔너리를 반환합니다.
+        return {}
+
+    def _extract_code_from_summary(self, summary: Dict[str, Any]) -> Optional[str]:
+        # 이 메서드는 분석 요약을 기반으로 생성된 Python 코드를 추출하는 로직을 구현해야 합니다.
+        # 현재는 임시로 None을 반환합니다.
+        return None

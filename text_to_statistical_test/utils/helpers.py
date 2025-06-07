@@ -1,39 +1,42 @@
-# 파일명: services/utils/helpers.py
+"""
+프로젝트 전반에서 사용되는 범용 헬퍼 클래스 및 함수를 정의합니다.
+"""
 
-import os
-from pathlib import Path
+import threading
+from typing import Any
+import json
+import numpy as np
 
-
-def get_file_extension(file_path: str) -> str:
+# Custom JSON Encoder for NumPy types
+class CustomJSONEncoder(json.JSONEncoder):
     """
-    파일 경로에서 확장자를 소문자 문자열로 반환합니다.
-    :param file_path: 파일 경로
-    :return: '.csv', '.xlsx' 등
+    NumPy 데이터 타입(ndarray, int64, float64, bool_ 등)을
+    Python 기본 타입으로 변환하여 JSON 직렬화가 가능하도록 만드는 커스텀 인코더.
     """
-    return Path(file_path).suffix.lower()
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, (np.datetime64, np.timedelta64)):
+            return str(obj)
+        return super(CustomJSONEncoder, self).default(obj)
 
-
-def get_file_size_mb(file_path: str) -> float:
+class Singleton(type):
     """
-    파일 크기를 메가바이트 단위로 반환합니다.
-    :param file_path: 파일 경로
-    :return: 파일 크기 (단위: MB)
-    :raises ValueError: 파일이 존재하지 않는 경우
+    싱글턴 디자인 패턴을 구현하는 메타클래스.
+    이 메타클래스를 사용하는 클래스는 프로그램 내에서 단 하나의 인스턴스만 갖게 됩니다.
     """
-    path_obj = Path(file_path)
-    if not path_obj.exists() or not path_obj.is_file():
-        raise ValueError(f"파일이 존재하지 않거나 파일이 아닙니다: {file_path}")
+    _instances = {}
+    _lock = threading.Lock()
 
-    size_bytes = os.path.getsize(path_obj)
-    size_mb = size_bytes / (1024 * 1024)
-    return round(size_mb, 4)
-
-
-def is_file_readable(file_path: str) -> bool:
-    """
-    파일이 존재하고 읽기 권한이 있는지 여부를 반환합니다.
-    :param file_path: 파일 경로
-    :return: 읽기 가능하면 True, 아니면 False
-    """
-    path_obj = Path(file_path)
-    return path_obj.exists() and path_obj.is_file() and os.access(path_obj, os.R_OK)
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            with cls._lock:
+                if cls not in cls._instances:
+                    cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls] 

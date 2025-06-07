@@ -1,153 +1,83 @@
 """
 Application Settings
 
-통합 설정 파일
-- API 키 관리
-- 기본 경로 설정
-- LLM 모델 설정
-- 데이터베이스 설정 등
+프로젝트 전반에서 사용되는 핵심 설정 값을 정의합니다.
+이 파일은 하드코딩된 경로, 기본값 등을 중앙에서 관리하여
+일관성을 유지하고 변경을 용이하게 합니다.
 """
 
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
-# .env 파일 로딩 (중앙 집중식 환경변수 관리)
-try:
-    from dotenv import load_dotenv
-    
-    # 프로젝트 루트에서 .env 파일 찾기
-    PROJECT_ROOT = Path(__file__).parent.parent
-    env_file = PROJECT_ROOT / '.env'
-    
-    if env_file.exists():
-        load_dotenv(env_file, override=False)  # 기존 환경변수 우선
-    
-except ImportError:
-    # dotenv가 없어도 실행 가능하도록 (시스템 환경변수 사용)
-    PROJECT_ROOT = Path(__file__).parent.parent
-except Exception:
-    # 기타 오류 시에도 계속 진행
-    PROJECT_ROOT = Path(__file__).parent.parent
+# .env 파일 로딩은 main.py에서 처리하므로 여기서는 os.getenv만 사용합니다.
+
+# 프로젝트의 루트 디렉토리를 기준으로 경로를 설정합니다.
+PROJECT_ROOT = Path(__file__).parent.parent
+
+@dataclass
+class PathSettings:
+    """애플리케이션에서 사용하는 주요 경로들을 정의합니다."""
+    project_root: Path = PROJECT_ROOT
+    resources_dir: Path = PROJECT_ROOT / "resources"
+    input_data_dir: Path = PROJECT_ROOT / "input_data"
+    output_data_dir: Path = PROJECT_ROOT / "output_data"
+    reports_dir: Path = output_data_dir / "reports"
+    visualizations_dir: Path = output_data_dir / "visualizations"
+    logs_dir: Path = PROJECT_ROOT / "logs"
 
 @dataclass
 class LLMSettings:
-    """LLM 관련 설정"""
-    default_model: str = "gpt-4-turbo-preview"
-    openai_api_key: Optional[str] = None
-    anthropic_api_key: Optional[str] = None
-    max_tokens: int = 4000
-    temperature: float = 0.1
-    timeout: int = 60
-    
-    def __post_init__(self):
-        """환경변수에서 API 키 로드"""
-        self.openai_api_key = os.getenv("OPENAI_API_KEY")
-        self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    """LLM API와 관련된 설정을 정의합니다."""
+    # .env 파일에서 키를 로드합니다. 키가 없으면 None이 됩니다.
+    openai_api_key: str | None = field(default_factory=lambda: os.getenv("OPENAI_API_KEY"))
+    default_model: str = "gpt-4-turbo"
+    temperature: float = 0.2
+    max_tokens: int = 4096
 
-@dataclass  
-class PathSettings:
-    """경로 관련 설정"""
-    project_root: Path = PROJECT_ROOT
-    input_data_dir: Path = PROJECT_ROOT / "input_data"
-    data_files_dir: Path = PROJECT_ROOT / "input_data" / "data_files"
-    metadata_dir: Path = PROJECT_ROOT / "input_data" / "metadata"
-    output_data_dir: Path = PROJECT_ROOT / "output_data"
-    reports_dir: Path = PROJECT_ROOT / "output_data" / "reports"
-    visualizations_dir: Path = PROJECT_ROOT / "output_data" / "visualizations"
-    cache_dir: Path = PROJECT_ROOT / "output_data" / "analysis_cache"
-    logs_dir: Path = PROJECT_ROOT / "logs"
-    resources_dir: Path = PROJECT_ROOT / "resources"
+@dataclass
+class AppSettings:
+    """애플리케이션의 일반 설정을 정의합니다."""
+    # .env 파일이나 환경변수에서 값을 가져옵니다. 없으면 기본값이 사용됩니다.
+    log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
+    debug: bool = os.getenv("DEBUG", "false").lower() == "true"
+    supported_file_formats: List[str] = field(default_factory=lambda: ['.csv', '.xlsx', '.xls'])
+    # RAG 서비스 관련 설정 추가
     knowledge_base_dir: Path = PROJECT_ROOT / "resources" / "knowledge_base"
+    rag_storage_path: Path = PROJECT_ROOT / "output_data" / "rag_storage"
 
+# 전체 설정을 통합하는 컨테이너 클래스
 @dataclass
-class RAGSettings:
-    """RAG 시스템 설정"""
-    vector_store_type: str = "faiss"  # faiss, chroma, lancedb 등
-    embedding_model: str = "text-embedding-3-small"
-    chunk_size: int = 1000
-    chunk_overlap: int = 200
-    max_search_results: int = 10
-    similarity_threshold: float = 0.7
-    cache_ttl: int = 3600  # 1시간
+class Settings:
+    paths: PathSettings
+    llm: LLMSettings
+    app: AppSettings
 
-@dataclass
-class DatabaseSettings:
-    """데이터베이스 설정 (필요시)"""
-    db_type: str = "sqlite"
-    db_host: str = "localhost"
-    db_port: int = 5432
-    db_name: str = "text_to_statistical_test"
-    db_user: Optional[str] = None
-    db_password: Optional[str] = None
+def get_settings() -> Settings:
+    """
+    모든 설정 클래스를 포함하는 단일 Settings 객체를 반환합니다.
+    """
+    return Settings(
+        paths=PathSettings(),
+        llm=LLMSettings(),
+        app=AppSettings()
+    )
 
-@dataclass
-class StatisticsSettings:
-    """통계 분석 설정"""
-    significance_level: float = 0.05
-    confidence_level: float = 0.95
-    bootstrap_samples: int = 1000
-    random_seed: int = 42
-    max_categories: int = 20  # 범주형 변수 최대 카테고리 수
-
-@dataclass
-class ApplicationSettings:
-    """애플리케이션 전체 설정"""
-    debug: bool = False
-    log_level: str = "INFO"
-    max_file_size_mb: int = 100
-    supported_file_formats: list = None
-    
-    def __post_init__(self):
-        if self.supported_file_formats is None:
-            self.supported_file_formats = ['.csv', '.xlsx', '.xls', '.json', '.parquet', '.tsv']
-
-# 설정 인스턴스 생성
-llm_settings = LLMSettings()
-path_settings = PathSettings()
-rag_settings = RAGSettings()
-db_settings = DatabaseSettings()
-stats_settings = StatisticsSettings()
-app_settings = ApplicationSettings()
-
-def get_settings() -> Dict[str, Any]:
-    """모든 설정을 딕셔너리로 반환"""
-    return {
-        'llm': llm_settings,
-        'paths': path_settings,
-        'rag': rag_settings,
-        'database': db_settings,
-        'statistics': stats_settings,
-        'application': app_settings
-    }
-
-def update_settings(settings_dict: Dict[str, Any]) -> None:
-    """설정 업데이트"""
-    global llm_settings, path_settings, rag_settings, db_settings, stats_settings, app_settings
-    
-    if 'llm' in settings_dict:
-        for key, value in settings_dict['llm'].items():
-            if hasattr(llm_settings, key):
-                setattr(llm_settings, key, value)
-    
-    # 다른 설정들도 유사하게 처리...
-    
-def ensure_directories():
-    """필요한 디렉토리들이 존재하는지 확인하고 생성"""
-    directories = [
-        path_settings.input_data_dir,
-        path_settings.data_files_dir,
-        path_settings.metadata_dir,
-        path_settings.output_data_dir,
-        path_settings.reports_dir,
-        path_settings.visualizations_dir,
-        path_settings.cache_dir,
-        path_settings.logs_dir
+# 모듈이 임포트될 때 디렉토리 생성 로직을 한 번 실행합니다.
+def ensure_directories_exist():
+    """
+    애플리케이션 실행에 필요한 출력 디렉토리들이 존재하는지 확인하고,
+    없으면 생성합니다.
+    """
+    settings = get_settings()
+    dirs_to_create = [
+        settings.paths.reports_dir,
+        settings.paths.visualizations_dir,
+        settings.paths.logs_dir,
+        settings.app.rag_storage_path,
     ]
-    
-    for directory in directories:
+    for directory in dirs_to_create:
         directory.mkdir(parents=True, exist_ok=True)
 
-# 시작시 디렉토리 생성
-ensure_directories() 
+ensure_directories_exist() 

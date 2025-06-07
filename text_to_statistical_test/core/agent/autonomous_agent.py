@@ -1,701 +1,210 @@
 """
-Autonomous Agent
+Autonomous Agent for Statistical Analysis
 
-자율적 의사결정 및 행동을 수행하는 LLM Agent
+LLM을 사용하여 통계 분석의 계획, 실행, 해석을 자율적으로 수행하는 에이전트.
+'Orchestrator-Engine' 모델에 따라, 복잡한 로직은 서비스 계층에 위임하고
+자신은 'Plan-Execute-Interpret'의 핵심 흐름을 담당한다.
 """
 
 import logging
-from typing import Dict, Any, List, Optional, Tuple, Union
-from dataclasses import dataclass, field
-from enum import Enum
-import json
-import time
-from datetime import datetime
+from typing import Dict, Any, List, Optional
+import pandas as pd
 
-from services.llm.llm_client import LLMClient
-from services.llm.prompt_engine import PromptEngine
-from services.llm.llm_response_parser import LLMResponseParser
-from core.rag.knowledge_store import KnowledgeStore
-from core.rag.query_engine import QueryEngine
-from core.rag.context_builder import ContextBuilder
-from services.code_executor.safe_code_runner import SafeCodeRunner
-from utils.error_handler import handle_error, StatisticalException
-
-
-class AgentState(Enum):
-    """Agent 상태"""
-    IDLE = "idle"
-    ANALYZING = "analyzing"
-    PLANNING = "planning"
-    EXECUTING = "executing"
-    INTERPRETING = "interpreting"
-    ERROR = "error"
-    COMPLETED = "completed"
-
-
-class ActionType(Enum):
-    """Agent 행동 유형"""
-    ANALYZE_DATA = "analyze_data"
-    SEARCH_KNOWLEDGE = "search_knowledge"
-    GENERATE_CODE = "generate_code"
-    EXECUTE_CODE = "execute_code"
-    VALIDATE_ASSUMPTIONS = "validate_assumptions"
-    INTERPRET_RESULTS = "interpret_results"
-    ASK_USER = "ask_user"
-    ADJUST_STRATEGY = "adjust_strategy"
-
-
-@dataclass
-class AgentAction:
-    """Agent 행동"""
-    action_type: ActionType
-    parameters: Dict[str, Any]
-    reasoning: str
-    confidence: float
-    timestamp: datetime = field(default_factory=datetime.now)
-    result: Optional[Dict[str, Any]] = None
-    success: bool = False
-
-
-@dataclass
-class AgentMemory:
-    """Agent 기억"""
-    conversation_history: List[Dict[str, Any]] = field(default_factory=list)
-    analysis_history: List[Dict[str, Any]] = field(default_factory=list)
-    learned_patterns: Dict[str, Any] = field(default_factory=dict)
-    user_preferences: Dict[str, Any] = field(default_factory=dict)
-    error_patterns: List[Dict[str, Any]] = field(default_factory=list)
-
-
-@dataclass
-class AgentGoal:
-    """Agent 목표"""
-    primary_objective: str
-    success_criteria: List[str]
-    constraints: List[str]
-    priority: int = 1
-    deadline: Optional[datetime] = None
-    progress: float = 0.0
-
+from services.llm.llm_service import LLMService
+# services/__init__.py 에서 완성된 인스턴스를 가져옵니다.
+from services import statistics_service
+from .tools import ToolRegistry
 
 class AutonomousAgent:
-    """자율적 의사결정 및 행동 주체 LLM Agent"""
+    """
+    자율적으로 통계 분석을 수행하는 주체.
+    """
     
-    def __init__(self, agent_id: str = None):
-        """
-        AutonomousAgent 초기화
-        
-        Args:
-            agent_id: Agent 식별자
-        """
-        self.agent_id = agent_id or f"agent_{int(time.time())}"
+    def __init__(self, llm_service: LLMService):
         self.logger = logging.getLogger(__name__)
+        self.llm_service = llm_service
         
-        # 핵심 컴포넌트 초기화
-        self.llm_client = LLMClient()
-        self.prompt_engine = PromptEngine()
-        self.response_parser = LLMResponseParser()
-        self.knowledge_store = KnowledgeStore()
-        self.query_engine = QueryEngine()
-        self.context_builder = ContextBuilder()
-        self.code_runner = SafeCodeRunner()
+        # ToolRegistry 초기화 시 모든 서비스 인스턴스 주입
+        self.tool_registry = ToolRegistry(
+            stats_service=statistics_service
+        )
         
-        # Agent 상태 관리
-        self.state = AgentState.IDLE
-        self.current_goal: Optional[AgentGoal] = None
-        self.action_history: List[AgentAction] = []
-        self.memory = AgentMemory()
-        
-        # 설정
-        self.max_iterations = 50
-        self.confidence_threshold = 0.7
-        self.learning_enabled = True
-        
-        self.logger.info(f"AutonomousAgent {self.agent_id} 초기화 완료")
-    
-    async def pursue_goal(self, goal: AgentGoal, context: Dict[str, Any]) -> Dict[str, Any]:
+        self.logger.info(f"AutonomousAgent 초기화 완료. 사용 가능한 도구: {len(self.tool_registry.get_tool_definitions())}개")
+
+    async def run_analysis(
+        self,
+        dataframe: pd.DataFrame,
+        structured_request: Dict[str, Any],
+        knowledge_context: str = ""  # RAG를 통해 보강된 컨텍스트
+    ) -> Dict[str, Any]:
         """
-        목표 추구 및 자율적 실행
-        
+        주어진 데이터와 구조화된 요청에 따라 자율적으로 통계 분석을 수행합니다.
+        '계획 수립 -> 도구 실행 -> 결과 종합'의 3단계 워크플로우를 따릅니다.
+
         Args:
-            goal: 추구할 목표
-            context: 실행 컨텍스트
-            
+            dataframe (pd.DataFrame): 분석 대상 데이터.
+            structured_request (Dict[str, Any]): UserRequestStep에서 생성된 구조화된 분석 목표.
+            knowledge_context (str): RAG를 통해 검색된 관련 지식 컨텍스트.
+
         Returns:
-            Dict: 실행 결과
+            Dict[str, Any]: 분석의 모든 과정을 포함하는 최종 결과.
+                           (계획, 가정 검토, 본 분석, 효과 크기, 사후 검정, 최종 해석 등)
         """
-        self.logger.info(f"목표 추구 시작: {goal.primary_objective}")
+        print("\n" + "="*15 + " 자율 분석 시작 " + "="*15)
+
+        # 사용 가능한 도구 목록을 LLM에 전달하여 계획 수립
+        tool_definitions = self.tool_registry.get_tool_definitions()
+
+        # 1. 계획 수립 (Plan)
+        analysis_plan = await self._create_analysis_plan(
+            structured_request, dataframe, tool_definitions, knowledge_context
+        )
+        if not analysis_plan or not analysis_plan.get('steps'):
+            raise RuntimeError("LLM을 통해 분석 계획을 수립하는 데 실패했습니다.")
+
+        # 2. 계획 실행 (Execute)
+        execution_results = await self._execute_plan(analysis_plan, dataframe)
+
+        # 3. 결과 해석 및 종합 (Interpret)
+        final_summary = await self._interpret_results(
+            structured_request=structured_request,
+            analysis_plan=analysis_plan,
+            execution_results=execution_results
+        )
         
-        try:
-            # 목표 설정
-            self.current_goal = goal
-            self.state = AgentState.ANALYZING
-            
-            # 초기 상황 분석
-            situation_analysis = await self._analyze_situation(context)
-            
-            # 전략 수립
-            strategy = await self._develop_strategy(situation_analysis, goal)
-            
-            # 자율적 실행 루프
-            execution_result = await self._autonomous_execution_loop(strategy, context)
-            
-            # 결과 해석 및 학습
-            final_result = await self._interpret_and_learn(execution_result, goal)
-            
-            self.state = AgentState.COMPLETED
-            self.logger.info("목표 추구 완료")
-            
-            return final_result
-            
-        except Exception as e:
-            self.logger.error(f"목표 추구 중 오류: {e}")
-            self.state = AgentState.ERROR
-            return {
-                'success': False,
-                'error': str(e),
-                'agent_id': self.agent_id,
-                'goal': goal.primary_objective
-            }
-    
-    async def _analyze_situation(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """상황 분석"""
-        self.logger.info("상황 분석 시작")
+        print("="*15 + " 자율 분석 종료 " + "="*15)
         
+        # 분석의 모든 과정을 포함하는 포괄적인 결과 객체를 반환합니다.
+        return {
+            "analysis_plan": analysis_plan,
+            "execution_results": execution_results,
+            "final_summary": final_summary
+        }
+
+    async def _create_analysis_plan(
+        self,
+        structured_request: Dict[str, Any],
+        dataframe: pd.DataFrame,
+        tool_definitions: List[Dict[str, Any]],
+        knowledge_context: str  # RAG 컨텍스트 추가
+    ) -> Dict[str, Any]:
+        """LLM을 호출하여 상세한 단계별 분석 계획을 수립합니다."""
+        print("-> (1/3) 분석 계획 수립 중...")
         try:
-            # 데이터 특성 분석
-            data_analysis = await self._analyze_data_characteristics(context.get('data'))
-            
-            # 사용자 요구사항 분석
-            user_requirements = await self._analyze_user_requirements(context.get('user_input'))
-            
-            # 제약사항 분석
-            constraints = await self._analyze_constraints(context)
-            
-            # 가용 도구 및 리소스 분석
-            resources = await self._analyze_available_resources()
-            
-            situation_analysis = {
-                'data_characteristics': data_analysis,
-                'user_requirements': user_requirements,
-                'constraints': constraints,
-                'available_resources': resources,
-                'complexity_level': self._assess_complexity(data_analysis, user_requirements),
-                'recommended_approach': self._recommend_initial_approach(data_analysis, user_requirements)
-            }
-            
-            # 메모리에 저장
-            self.memory.analysis_history.append({
-                'timestamp': datetime.now(),
-                'type': 'situation_analysis',
-                'result': situation_analysis
-            })
-            
-            return situation_analysis
-            
-        except Exception as e:
-            self.logger.error(f"상황 분석 오류: {e}")
-            raise
-    
-    async def _develop_strategy(self, situation_analysis: Dict[str, Any], 
-                              goal: AgentGoal) -> Dict[str, Any]:
-        """전략 수립"""
-        self.logger.info("전략 수립 시작")
-        
-        try:
-            # RAG를 통한 관련 지식 검색
-            knowledge_query = self._build_knowledge_query(situation_analysis, goal)
-            relevant_knowledge = await self.query_engine.search(knowledge_query)
-            
-            # 전략 생성 프롬프트 구성
-            strategy_prompt = self.prompt_engine.create_strategy_prompt(
-                goal=goal,
-                situation=situation_analysis,
-                knowledge=relevant_knowledge,
-                agent_memory=self.memory
+            plan = await self.llm_service.create_analysis_plan(
+                structured_request=structured_request,
+                dataframe=dataframe,
+                tool_definitions=tool_definitions,
+                knowledge_context=knowledge_context  # LLM 서비스에 전달
             )
-            
-            # LLM을 통한 전략 생성
-            strategy_response = await self.llm_client.generate_response(strategy_prompt)
-            strategy = self.response_parser.parse_strategy_response(strategy_response)
-            
-            # 전략 검증 및 개선
-            validated_strategy = await self._validate_and_improve_strategy(strategy, situation_analysis)
-            
-            self.logger.info(f"전략 수립 완료: {len(validated_strategy.get('steps', []))}단계")
-            return validated_strategy
-            
+            self.logger.info(f"분석 계획 수립 완료: {len(plan.get('steps', []))} 단계")
+            self.logger.debug(f"수립된 계획: {plan}")
+            return plan
         except Exception as e:
-            self.logger.error(f"전략 수립 오류: {e}")
-            raise
-    
-    async def _autonomous_execution_loop(self, strategy: Dict[str, Any], 
-                                       context: Dict[str, Any]) -> Dict[str, Any]:
-        """자율적 실행 루프"""
-        self.logger.info("자율적 실행 루프 시작")
+            self.logger.error(f"분석 계획 수립 중 오류: {e}", exc_info=True)
+            return {}
+
+    async def _execute_plan(
+        self,
+        analysis_plan: Dict[str, Any],
+        dataframe: pd.DataFrame
+    ) -> List[Dict[str, Any]]:
+        """
+        수립된 계획에 따라 각 단계를 순차적으로 실행하고, 도구를 사용합니다.
+        이전 단계의 결과를 다음 단계의 입력으로 지능적으로 연결(wiring)합니다.
+        """
+        print("-> (2/3) 분석 계획 실행 중...")
+        results = []
         
-        execution_results = []
-        current_context = context.copy()
+        # 이전 통계 테스트의 결과와 파라미터를 저장하기 위한 변수
+        last_test_result: Optional[Dict[str, Any]] = None
+        last_test_params: Optional[Dict[str, Any]] = None
+
+        for i, step in enumerate(analysis_plan.get("steps", [])):
+            tool_name = step.get("tool_name")
+            params = step.get("params", {})
+            step_name = step.get("step_name", f"Unnamed Step {i+1}")
+            print(f"--> 실행 ({i+1}/{len(analysis_plan['steps'])}): {step_name}")
+            
+            if not tool_name:
+                self.logger.warning(f"'{step_name}' 단계에 실행할 도구가 지정되지 않았습니다. 건너뜁니다.")
+                continue
+
+            try:
+                # [!!!] 최종 데이터 와이어링 로직 (v2)
+                # 각 도구의 요구사항에 맞춰, 필요한 컨텍스트만 선택적으로 주입합니다.
+                if last_test_params:
+                    # 이전 파라미터가 필요한 도구들 (`calculate_effect_size`, `run_posthoc_test`)
+                    if tool_name in ["calculate_effect_size", "run_posthoc_test"]:
+                        final_params = last_test_params.copy()
+                        final_params.update(params)
+                        params = final_params
+                        self.logger.info(f"'{tool_name}'에 이전 테스트 파라미터를 주입합니다. 최종 파라미터: {params}")
+
+                if last_test_result:
+                    # 이전 결과가 필요한 도구 (`calculate_effect_size`)
+                    if tool_name == "calculate_effect_size":
+                        params["test_results"] = last_test_result
+                        self.logger.info("이전 테스트 결과를 'test_results'에 주입합니다.")
+                
+                # 도구 레지스트리를 통해 실제 실행할 함수를 가져옴
+                tool_function = self.tool_registry.get_tool(tool_name)
+                
+                self.logger.info(f"'{tool_name}' 실행. 파라미터: {params}")
+                result = tool_function(data=dataframe, **params)
+                
+                # 다음 단계를 위해 주 분석(run_statistical_test)의 결과와 파라미터를 저장
+                if tool_name == "run_statistical_test":
+                    self.logger.info(f"'{tool_name}'의 결과와 파라미터를 후속 단계를 위해 저장합니다.")
+                    last_test_result = result
+                    last_test_params = params.copy()
+
+                step_result = {
+                    "step_name": step_name,
+                    "tool_name": tool_name,
+                    "params": params,
+                    "output": result,
+                    "status": "SUCCESS"
+                }
+
+            except Exception as e:
+                self.logger.error(f"'{tool_name}' 도구 실행 중 오류: {e}", exc_info=True)
+                step_result = {
+                    "step_name": step_name,
+                    "tool_name": tool_name,
+                    "params": params,
+                    "error": str(e),
+                    "status": "FAILED"
+                }
+            
+            results.append(step_result)
         
+        self.logger.info("분석 계획 실행 완료.")
+        return results
+
+    async def _interpret_results(
+        self,
+        structured_request: Dict[str, Any],
+        analysis_plan: Dict[str, Any],
+        execution_results: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """실행된 모든 결과를 종합하여 최종 해석을 생성합니다."""
+        print("-> (3/3) 최종 결과 해석 및 종합 중...")
         try:
-            for iteration in range(self.max_iterations):
-                self.logger.info(f"실행 반복 {iteration + 1}/{self.max_iterations}")
-                
-                # 다음 행동 결정
-                next_action = await self._decide_next_action(strategy, current_context, execution_results)
-                
-                if not next_action:
-                    self.logger.info("더 이상 수행할 행동이 없습니다.")
-                    break
-                
-                # 행동 실행
-                action_result = await self._execute_action(next_action, current_context)
-                
-                # 결과 평가 및 컨텍스트 업데이트
-                evaluation = await self._evaluate_action_result(action_result, next_action)
-                current_context = self._update_context(current_context, action_result)
-                
-                execution_results.append({
-                    'iteration': iteration + 1,
-                    'action': next_action,
-                    'result': action_result,
-                    'evaluation': evaluation
-                })
-                
-                # 목표 달성 여부 확인
-                if await self._is_goal_achieved(execution_results):
-                    self.logger.info("목표 달성 완료")
-                    break
-                
-                # 전략 조정 필요성 확인
-                if evaluation.get('requires_strategy_adjustment'):
-                    strategy = await self._adjust_strategy(strategy, execution_results, current_context)
-                
-                # 오류 발생 시 복구 시도
-                if not action_result.get('success') and evaluation.get('severity') == 'high':
-                    recovery_result = await self._attempt_recovery(action_result, current_context)
-                    if recovery_result.get('success'):
-                        current_context = self._update_context(current_context, recovery_result)
-            
-            return {
-                'success': True,
-                'execution_results': execution_results,
-                'final_context': current_context,
-                'iterations_used': len(execution_results)
-            }
-            
+            summary = await self.llm_service.summarize_analysis_results(
+                structured_request=structured_request,
+                analysis_plan=analysis_plan,
+                execution_results=execution_results
+            )
+            self.logger.info("최종 결과 해석 및 종합 완료.")
+            return summary
         except Exception as e:
-            self.logger.error(f"실행 루프 오류: {e}")
+            self.logger.error(f"최종 결과 해석 중 오류: {e}", exc_info=True)
+            # 해석에 실패하더라도 수집된 데이터는 반환
             return {
-                'success': False,
-                'error': str(e),
-                'execution_results': execution_results,
-                'final_context': current_context
-            }
-    
-    async def _decide_next_action(self, strategy: Dict[str, Any], context: Dict[str, Any],
-                                execution_results: List[Dict[str, Any]]) -> Optional[AgentAction]:
-        """다음 행동 결정"""
-        try:
-            # 현재 상황 평가
-            current_situation = await self._assess_current_situation(context, execution_results)
-            
-            # 가능한 행동들 생성
-            possible_actions = await self._generate_possible_actions(strategy, current_situation)
-            
-            if not possible_actions:
-                return None
-            
-            # 최적 행동 선택
-            best_action = await self._select_best_action(possible_actions, current_situation)
-            
-            # 행동 기록
-            self.action_history.append(best_action)
-            
-            return best_action
-            
-        except Exception as e:
-            self.logger.error(f"행동 결정 오류: {e}")
-            return None
-    
-    async def _execute_action(self, action: AgentAction, context: Dict[str, Any]) -> Dict[str, Any]:
-        """행동 실행"""
-        self.logger.info(f"행동 실행: {action.action_type.value}")
-        
-        try:
-            if action.action_type == ActionType.ANALYZE_DATA:
-                result = await self._execute_data_analysis(action, context)
-            elif action.action_type == ActionType.SEARCH_KNOWLEDGE:
-                result = await self._execute_knowledge_search(action, context)
-            elif action.action_type == ActionType.GENERATE_CODE:
-                result = await self._execute_code_generation(action, context)
-            elif action.action_type == ActionType.EXECUTE_CODE:
-                result = await self._execute_code_execution(action, context)
-            elif action.action_type == ActionType.VALIDATE_ASSUMPTIONS:
-                result = await self._execute_assumption_validation(action, context)
-            elif action.action_type == ActionType.INTERPRET_RESULTS:
-                result = await self._execute_result_interpretation(action, context)
-            elif action.action_type == ActionType.ASK_USER:
-                result = await self._execute_user_interaction(action, context)
-            elif action.action_type == ActionType.ADJUST_STRATEGY:
-                result = await self._execute_strategy_adjustment(action, context)
-            else:
-                result = {'success': False, 'error': f'Unknown action type: {action.action_type}'}
-            
-            # 행동 결과 기록
-            action.result = result
-            action.success = result.get('success', False)
-            
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"행동 실행 오류: {e}")
-            return {'success': False, 'error': str(e)}
-    
-    async def _interpret_and_learn(self, execution_result: Dict[str, Any], 
-                                 goal: AgentGoal) -> Dict[str, Any]:
-        """결과 해석 및 학습"""
-        self.logger.info("결과 해석 및 학습 시작")
-        
-        try:
-            # 실행 결과 해석
-            interpretation = await self._interpret_execution_results(execution_result, goal)
-            
-            # 성공/실패 패턴 학습
-            if self.learning_enabled:
-                await self._learn_from_execution(execution_result, goal)
-            
-            # 최종 보고서 생성
-            final_report = await self._generate_final_report(interpretation, execution_result, goal)
-            
-            return {
-                'success': execution_result.get('success', False),
-                'interpretation': interpretation,
-                'final_report': final_report,
-                'execution_summary': self._create_execution_summary(execution_result),
-                'agent_id': self.agent_id,
-                'goal_achieved': await self._is_goal_achieved(execution_result.get('execution_results', []))
-            }
-            
-        except Exception as e:
-            self.logger.error(f"결과 해석 및 학습 오류: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'agent_id': self.agent_id
-            }
-    
-    # 헬퍼 메서드들
-    async def _analyze_data_characteristics(self, data) -> Dict[str, Any]:
-        """데이터 특성 분석"""
-        if data is None:
-            return {'type': 'none', 'characteristics': {}}
-        
-        # 데이터 기본 정보 분석
-        characteristics = {
-            'shape': getattr(data, 'shape', None),
-            'columns': list(getattr(data, 'columns', [])),
-            'dtypes': dict(getattr(data, 'dtypes', {})),
-            'missing_values': dict(getattr(data, 'isnull', lambda: {})().sum()) if hasattr(data, 'isnull') else {},
-            'summary_stats': data.describe().to_dict() if hasattr(data, 'describe') else {}
-        }
-        
-        return {
-            'type': 'dataframe' if hasattr(data, 'shape') else 'unknown',
-            'characteristics': characteristics
-        }
-    
-    async def _analyze_user_requirements(self, user_input) -> Dict[str, Any]:
-        """사용자 요구사항 분석"""
-        if not user_input:
-            return {'requirements': [], 'analysis_type': 'unknown'}
-        
-        # LLM을 통한 요구사항 분석
-        analysis_prompt = self.prompt_engine.create_requirement_analysis_prompt(user_input)
-        response = await self.llm_client.generate_response(analysis_prompt)
-        
-        return self.response_parser.parse_requirement_analysis(response)
-    
-    async def _analyze_constraints(self, context: Dict[str, Any]) -> List[str]:
-        """제약사항 분석"""
-        constraints = []
-        
-        # 데이터 제약사항
-        if context.get('data') is not None:
-            data = context['data']
-            if hasattr(data, 'shape') and data.shape[0] < 30:
-                constraints.append("소표본 크기")
-            if hasattr(data, 'isnull') and data.isnull().sum().sum() > 0:
-                constraints.append("결측값 존재")
-        
-        # 시간 제약사항
-        if self.current_goal and self.current_goal.deadline:
-            time_left = (self.current_goal.deadline - datetime.now()).total_seconds()
-            if time_left < 3600:  # 1시간 미만
-                constraints.append("시간 제약")
-        
-        return constraints
-    
-    async def _analyze_available_resources(self) -> Dict[str, Any]:
-        """가용 리소스 분석"""
-        return {
-            'llm_client': self.llm_client is not None,
-            'knowledge_store': self.knowledge_store is not None,
-            'code_runner': self.code_runner is not None,
-            'statistical_tools': True,  # 통계 도구 가용성
-            'visualization_tools': True  # 시각화 도구 가용성
-        }
-    
-    def _assess_complexity(self, data_analysis: Dict[str, Any], 
-                          user_requirements: Dict[str, Any]) -> str:
-        """복잡도 평가"""
-        complexity_score = 0
-        
-        # 데이터 복잡도
-        if data_analysis.get('characteristics', {}).get('shape'):
-            rows, cols = data_analysis['characteristics']['shape']
-            if rows > 1000 or cols > 20:
-                complexity_score += 2
-            elif rows > 100 or cols > 10:
-                complexity_score += 1
-        
-        # 요구사항 복잡도
-        requirements = user_requirements.get('requirements', [])
-        if len(requirements) > 3:
-            complexity_score += 2
-        elif len(requirements) > 1:
-            complexity_score += 1
-        
-        if complexity_score >= 4:
-            return "high"
-        elif complexity_score >= 2:
-            return "medium"
-        else:
-            return "low"
-    
-    def _recommend_initial_approach(self, data_analysis: Dict[str, Any],
-                                  user_requirements: Dict[str, Any]) -> str:
-        """초기 접근법 추천"""
-        analysis_type = user_requirements.get('analysis_type', 'unknown')
-        
-        if analysis_type in ['comparison', 'group_comparison']:
-            return "statistical_testing"
-        elif analysis_type in ['relationship', 'correlation']:
-            return "correlation_analysis"
-        elif analysis_type in ['prediction', 'modeling']:
-            return "regression_analysis"
-        else:
-            return "exploratory_analysis"
-    
-    def _build_knowledge_query(self, situation_analysis: Dict[str, Any], 
-                              goal: AgentGoal) -> str:
-        """지식 검색 쿼리 구성"""
-        query_parts = [goal.primary_objective]
-        
-        # 데이터 특성 추가
-        data_chars = situation_analysis.get('data_characteristics', {})
-        if data_chars.get('type'):
-            query_parts.append(f"data type: {data_chars['type']}")
-        
-        # 추천 접근법 추가
-        if situation_analysis.get('recommended_approach'):
-            query_parts.append(f"approach: {situation_analysis['recommended_approach']}")
-        
-        return " ".join(query_parts)
-    
-    async def _validate_and_improve_strategy(self, strategy: Dict[str, Any],
-                                           situation_analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """전략 검증 및 개선"""
-        # 기본 검증
-        if not strategy.get('steps'):
-            strategy['steps'] = ['analyze_data', 'execute_analysis', 'interpret_results']
-        
-        # 상황에 맞는 조정
-        complexity = situation_analysis.get('complexity_level', 'medium')
-        if complexity == 'high':
-            # 고복잡도의 경우 더 세분화된 단계 추가
-            if 'validate_assumptions' not in strategy['steps']:
-                strategy['steps'].insert(-1, 'validate_assumptions')
-        
-        return strategy
-    
-    # 추가 실행 메서드들 (간소화된 구현)
-    async def _execute_data_analysis(self, action: AgentAction, context: Dict[str, Any]) -> Dict[str, Any]:
-        """데이터 분석 실행"""
-        return {'success': True, 'analysis_type': 'basic_statistics'}
-    
-    async def _execute_knowledge_search(self, action: AgentAction, context: Dict[str, Any]) -> Dict[str, Any]:
-        """지식 검색 실행"""
-        query = action.parameters.get('query', '')
-        results = await self.query_engine.search(query)
-        return {'success': True, 'results': results}
-    
-    async def _execute_code_generation(self, action: AgentAction, context: Dict[str, Any]) -> Dict[str, Any]:
-        """코드 생성 실행"""
-        return {'success': True, 'code': 'generated_code_placeholder'}
-    
-    async def _execute_code_execution(self, action: AgentAction, context: Dict[str, Any]) -> Dict[str, Any]:
-        """코드 실행"""
-        code = action.parameters.get('code', '')
-        result = self.code_runner.execute_code(code, context)
-        return {'success': result.success, 'execution_result': result}
-    
-    async def _execute_assumption_validation(self, action: AgentAction, context: Dict[str, Any]) -> Dict[str, Any]:
-        """가정 검증 실행"""
-        return {'success': True, 'assumptions_met': True}
-    
-    async def _execute_result_interpretation(self, action: AgentAction, context: Dict[str, Any]) -> Dict[str, Any]:
-        """결과 해석 실행"""
-        return {'success': True, 'interpretation': 'results_interpreted'}
-    
-    async def _execute_user_interaction(self, action: AgentAction, context: Dict[str, Any]) -> Dict[str, Any]:
-        """사용자 상호작용 실행"""
-        return {'success': True, 'user_response': 'simulated_response'}
-    
-    async def _execute_strategy_adjustment(self, action: AgentAction, context: Dict[str, Any]) -> Dict[str, Any]:
-        """전략 조정 실행"""
-        return {'success': True, 'adjusted_strategy': 'new_strategy'}
-    
-    # 기타 헬퍼 메서드들
-    async def _assess_current_situation(self, context: Dict[str, Any], 
-                                      execution_results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """현재 상황 평가"""
-        return {
-            'progress': len(execution_results) / self.max_iterations,
-            'last_action_success': execution_results[-1].get('result', {}).get('success', False) if execution_results else True,
-            'context_size': len(context)
-        }
-    
-    async def _generate_possible_actions(self, strategy: Dict[str, Any], 
-                                       situation: Dict[str, Any]) -> List[AgentAction]:
-        """가능한 행동들 생성"""
-        actions = []
-        
-        # 전략의 다음 단계에 따른 행동 생성
-        for step in strategy.get('steps', []):
-            if step == 'analyze_data':
-                actions.append(AgentAction(
-                    action_type=ActionType.ANALYZE_DATA,
-                    parameters={'analysis_type': 'descriptive'},
-                    reasoning="데이터 기본 분석 필요",
-                    confidence=0.8
-                ))
-            elif step == 'search_knowledge':
-                actions.append(AgentAction(
-                    action_type=ActionType.SEARCH_KNOWLEDGE,
-                    parameters={'query': 'statistical analysis methods'},
-                    reasoning="관련 지식 검색 필요",
-                    confidence=0.7
-                ))
-        
-        return actions
-    
-    async def _select_best_action(self, possible_actions: List[AgentAction],
-                                situation: Dict[str, Any]) -> AgentAction:
-        """최적 행동 선택"""
-        if not possible_actions:
-            return None
-        
-        # 신뢰도 기준으로 선택
-        best_action = max(possible_actions, key=lambda a: a.confidence)
-        return best_action
-    
-    async def _evaluate_action_result(self, result: Dict[str, Any], 
-                                    action: AgentAction) -> Dict[str, Any]:
-        """행동 결과 평가"""
-        return {
-            'success': result.get('success', False),
-            'quality': 'good' if result.get('success') else 'poor',
-            'requires_strategy_adjustment': not result.get('success'),
-            'severity': 'low' if result.get('success') else 'medium'
-        }
-    
-    def _update_context(self, context: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
-        """컨텍스트 업데이트"""
-        updated_context = context.copy()
-        if result.get('success'):
-            updated_context['last_successful_result'] = result
-        return updated_context
-    
-    async def _is_goal_achieved(self, execution_results: List[Dict[str, Any]]) -> bool:
-        """목표 달성 여부 확인"""
-        if not execution_results:
-            return False
-        
-        # 최근 결과들이 성공적인지 확인
-        recent_results = execution_results[-3:] if len(execution_results) >= 3 else execution_results
-        success_rate = sum(1 for r in recent_results if r.get('result', {}).get('success', False)) / len(recent_results)
-        
-        return success_rate >= 0.8
-    
-    async def _adjust_strategy(self, strategy: Dict[str, Any], 
-                             execution_results: List[Dict[str, Any]],
-                             context: Dict[str, Any]) -> Dict[str, Any]:
-        """전략 조정"""
-        # 실패한 단계들 분석
-        failed_steps = [r for r in execution_results if not r.get('result', {}).get('success', False)]
-        
-        if failed_steps:
-            # 대안 전략 생성
-            strategy['steps'] = ['search_knowledge', 'analyze_data', 'execute_analysis']
-            strategy['adjusted'] = True
-        
-        return strategy
-    
-    async def _attempt_recovery(self, action_result: Dict[str, Any], 
-                              context: Dict[str, Any]) -> Dict[str, Any]:
-        """복구 시도"""
-        return {'success': True, 'recovery_method': 'retry_with_different_approach'}
-    
-    async def _interpret_execution_results(self, execution_result: Dict[str, Any],
-                                         goal: AgentGoal) -> Dict[str, Any]:
-        """실행 결과 해석"""
-        return {
-            'goal_achievement': execution_result.get('success', False),
-            'key_findings': ['finding1', 'finding2'],
-            'recommendations': ['recommendation1', 'recommendation2']
-        }
-    
-    async def _learn_from_execution(self, execution_result: Dict[str, Any], goal: AgentGoal):
-        """실행으로부터 학습"""
-        # 성공/실패 패턴을 메모리에 저장
-        pattern = {
-            'goal_type': goal.primary_objective,
-            'success': execution_result.get('success', False),
-            'strategy_used': 'default',
-            'timestamp': datetime.now()
-        }
-        self.memory.learned_patterns[f"pattern_{len(self.memory.learned_patterns)}"] = pattern
-    
-    async def _generate_final_report(self, interpretation: Dict[str, Any],
-                                   execution_result: Dict[str, Any],
-                                   goal: AgentGoal) -> Dict[str, Any]:
-        """최종 보고서 생성"""
-        return {
-            'goal': goal.primary_objective,
-            'success': execution_result.get('success', False),
-            'interpretation': interpretation,
-            'execution_summary': self._create_execution_summary(execution_result),
-            'agent_id': self.agent_id,
-            'timestamp': datetime.now().isoformat()
-        }
-    
-    def _create_execution_summary(self, execution_result: Dict[str, Any]) -> Dict[str, Any]:
-        """실행 요약 생성"""
-        return {
-            'total_iterations': execution_result.get('iterations_used', 0),
-            'success_rate': 1.0 if execution_result.get('success') else 0.0,
-            'key_actions': len(self.action_history),
-            'final_state': self.state.value
-        }
-    
-    def get_agent_status(self) -> Dict[str, Any]:
-        """Agent 상태 반환"""
-        return {
-            'agent_id': self.agent_id,
-            'state': self.state.value,
-            'current_goal': self.current_goal.primary_objective if self.current_goal else None,
-            'action_count': len(self.action_history),
-            'memory_size': len(self.memory.conversation_history),
-            'learning_enabled': self.learning_enabled
-        } 
+                "error": "Failed to generate final summary.",
+                "details": str(e),
+                "structured_request": structured_request,
+                "analysis_plan": analysis_plan,
+                "execution_results": execution_results
+            } 

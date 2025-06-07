@@ -1,96 +1,87 @@
 """
 Report Builder
 
-보고서 생성 및 구조화 담당
+LLM이 생성한 리포트 콘텐츠를 최종 파일(HTML)로 변환하고 저장합니다.
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from pathlib import Path
 from datetime import datetime
-import pandas as pd
-import json
-
+from markdown_it import MarkdownIt
 
 class ReportBuilder:
-    """보고서 생성기"""
+    """
+    LLM이 생성한 마크다운 형식의 리포트 내용을 받아,
+    독립적인 HTML 파일로 변환하고 저장하는 역할을 담당합니다.
+    """
     
-    def __init__(self):
-        """ReportBuilder 초기화"""
+    def __init__(self, output_dir: str = "output_data/reports"):
         self.logger = logging.getLogger(__name__)
-    
-    def build_report(self, 
-                    analysis_results: Dict[str, Any],
-                    interpretation: str,
-                    business_insights: str,
-                    recommendations: str) -> Dict[str, Any]:
+        self.output_path = Path(output_dir)
+        self.output_path.mkdir(parents=True, exist_ok=True)
+        self.md = MarkdownIt()
+
+    def _get_html_template(self, content: str) -> str:
+        """리포트 내용을 감싸는 기본 HTML 템플릿"""
+        css_style = """
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+            h1, h2, h3 { color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+            h1 { font-size: 2.5em; }
+            h2 { font-size: 2em; }
+            pre { background-color: #ecf0f1; padding: 15px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; }
+            code { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; background-color: #f8f8f8; padding: 2px 4px; border-radius: 3px;}
+            pre > code { background-color: transparent; padding: 0; }
+            table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+            th, td { border: 1px solid #bdc3c7; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            img { max-width: 100%; height: auto; border-radius: 5px; margin-top: 15px; }
+        </style>
         """
-        종합 보고서 생성
-        
+        return f"""
+        <!DOCTYPE html>
+        <html lang="ko">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>자율 통계 분석 보고서</title>
+            {css_style}
+        </head>
+        <body>
+            {content}
+        </body>
+        </html>
+        """
+
+    def build_and_save(self, report_content: str, original_file_name: str) -> str:
+        """
+        마크다운 콘텐츠를 HTML로 변환하고, 고유한 파일명으로 저장합니다.
+
         Args:
-            analysis_results: 분석 결과
-            interpretation: 통계적 해석
-            business_insights: 비즈니스 인사이트
-            recommendations: 권장사항
-            
+            report_content (str): LLM이 생성한 마크다운 형식의 리포트 전체 내용.
+            original_file_name (str): 리포트 파일명을 생성하는 데 사용할 원본 데이터 파일명.
+
         Returns:
-            구조화된 보고서
+            str: 저장된 HTML 리포트 파일의 전체 경로.
         """
         try:
-            report = {
-                'metadata': {
-                    'generated_at': datetime.now().isoformat(),
-                    'report_type': 'statistical_analysis',
-                    'version': '1.0'
-                },
-                'executive_summary': {
-                    'key_findings': self._extract_key_findings(analysis_results),
-                    'business_impact': business_insights,
-                    'recommendations': recommendations
-                },
-                'analysis_details': analysis_results,
-                'interpretation': interpretation,
-                'appendix': {
-                    'methodology': self._get_methodology(analysis_results),
-                    'assumptions': self._get_assumptions(analysis_results),
-                    'limitations': self._get_limitations(analysis_results)
-                }
-            }
+            self.logger.info("Markdown 콘텐츠를 HTML로 변환합니다.")
+            html_content = self.md.render(report_content)
+            full_html = self._get_html_template(html_content)
+
+            # 고유한 파일명 생성
+            base_name = Path(original_file_name).stem
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            report_filename = f"report_{base_name}_{timestamp}.html"
+            report_filepath = self.output_path / report_filename
+
+            self.logger.info(f"HTML 리포트를 다음 경로에 저장합니다: {report_filepath}")
+            with open(report_filepath, 'w', encoding='utf-8') as f:
+                f.write(full_html)
             
-            return report
-            
+            return str(report_filepath)
+
         except Exception as e:
-            self.logger.error(f"보고서 생성 실패: {e}")
-            return {}
-    
-    def _extract_key_findings(self, analysis_results: Dict[str, Any]) -> List[str]:
-        """주요 발견사항 추출"""
-        findings = []
-        
-        if 'test_results' in analysis_results:
-            for test_name, result in analysis_results['test_results'].items():
-                if isinstance(result, dict) and 'p_value' in result:
-                    p_val = result['p_value']
-                    if p_val < 0.05:
-                        findings.append(f"{test_name}: 통계적으로 유의한 결과 (p={p_val:.4f})")
-                    else:
-                        findings.append(f"{test_name}: 통계적으로 유의하지 않음 (p={p_val:.4f})")
-        
-        return findings
-    
-    def _get_methodology(self, analysis_results: Dict[str, Any]) -> str:
-        """분석 방법론 설명"""
-        if 'methodology' in analysis_results:
-            return analysis_results['methodology']
-        return "통계적 검정을 통한 데이터 분석"
-    
-    def _get_assumptions(self, analysis_results: Dict[str, Any]) -> List[str]:
-        """분석 가정사항"""
-        if 'assumptions' in analysis_results:
-            return analysis_results['assumptions']
-        return ["정규성 가정", "독립성 가정", "등분산성 가정"]
-    
-    def _get_limitations(self, analysis_results: Dict[str, Any]) -> List[str]:
-        """분석 한계점"""
-        if 'limitations' in analysis_results:
-            return analysis_results['limitations']
-        return ["표본 크기의 한계", "관찰 연구의 한계", "일반화 가능성의 제한"] 
+            self.logger.error(f"리포트 파일 생성 및 저장 중 오류 발생: {e}", exc_info=True)
+            # 예외를 다시 발생시켜 상위 호출자가 처리하도록 함
+            raise 

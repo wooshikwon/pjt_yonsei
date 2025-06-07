@@ -1,18 +1,19 @@
 """
 LLM Services
 
-Large Language Model 관련 서비스
-- 다양한 LLM API 클라이언트
-- 동적 프롬프트 생성 및 관리
-- LLM 응답 파싱 및 검증
+LLM 관련 모든 기능을 제공하는 서비스 패키지
+- LLM API 클라이언트
+- LLM 응답 파서
+- LLM 기능 통합 서비스 (Facade)
 """
 
-from .llm_client import LLMClient
-from .prompt_engine import PromptEngine
+from .llm_client import LLMClient, get_llm_client
 from .llm_response_parser import LLMResponseParser
+from .llm_service import LLMService
 
 __all__ = [
-    'LLMClient',
-    'PromptEngine',
-    'LLMResponseParser'
+    "LLMClient",
+    "get_llm_client",
+    "LLMResponseParser",
+    "LLMService",
 ] 

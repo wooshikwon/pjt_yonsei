@@ -1,54 +1,92 @@
-# Python 3.11을 기반으로 한 공식 이미지 사용
-FROM python:3.11-slim
+# =============================================================================
+# Multi-stage Docker build for Text-to-Statistical-Test
+# =============================================================================
 
-# 작업 디렉토리 설정
+# 1. Builder Stage: Install dependencies
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim as builder
+
+# Set up Poetry environment
+ENV POETRY_VERSION=1.8.2
+ENV POETRY_HOME="/opt/poetry"
+ENV POETRY_VENV_IN_PROJECT=true
+ENV POETRY_NO_INTERACTION=1
+ENV PATH="$POETRY_HOME/bin:$PATH"
+
+# Install Poetry
+RUN pip install "poetry==$POETRY_VERSION"
+
+# Set working directory
 WORKDIR /app
 
-# 시스템 의존성 설치 (데이터 처리 및 컴파일에 필요한 패키지들)
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    libc-dev \
-    libffi-dev \
-    libssl-dev \
-    curl \
-    wget \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+# Copy dependency definition files
+COPY pyproject.toml poetry.lock ./
 
-# Python 의존성 파일 복사
-COPY requirements.txt .
+# Install only production dependencies
+# This creates a .venv directory in /app
+RUN poetry install --no-root --no-dev
 
-# Python 패키지 설치
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
 
-# 애플리케이션 코드 복사
-COPY . .
+# 2. Final Stage: Create the production image
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim as final
 
-# 로그 디렉토리 생성
-RUN mkdir -p logs
-
-# 환경변수 설정
-ENV PYTHONPATH=/app
+# Set environment variables for Python
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PATH="/app/.venv/bin:$PATH"
 
-# 기본 환경변수 (실제 사용시 .env 파일이나 docker run 시 설정)
-ENV LLM_PROVIDER=openai
-ENV LLM_MODEL_NAME=gpt-4o
-ENV LOG_LEVEL=INFO
-ENV DEBUG_MODE=false
+# Set working directory
+WORKDIR /app
 
-# 포트 노출 (필요시)
-EXPOSE 8000
+# Create a non-root user for security
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
-# 헬스체크 스크립트 생성 (데이터 처리 라이브러리 확인)
-RUN echo '#!/bin/bash\npython -c "import pandas, numpy, scipy, sklearn, matplotlib, pyarrow; print(\"Dependencies OK\")"' > /app/healthcheck.sh && \
-    chmod +x /app/healthcheck.sh
+# Copy virtual environment from builder stage
+COPY --from=builder /app/.venv ./.venv
 
-# 헬스체크 설정
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD /app/healthcheck.sh
+# Copy application source code
+COPY --chown=appuser:appgroup . .
 
-# 기본 명령어 설정
-CMD ["python", "main_runner.py", "--help"] 
+# Create necessary directories and set permissions
+# Ensures the app can write reports and logs
+RUN mkdir -p output_data/reports output_data/visualizations logs && \
+    chown -R appuser:appgroup output_data logs
+
+# Switch to the non-root user
+USER appuser
+
+# Entrypoint to run the application
+# Expects a .env file to be mounted or environment variables to be provided at runtime.
+# Example: python main.py --file 'input_data/data_files/sample_data.csv' --request 'Compare sales between Group A and Group B'
+CMD ["python", "main.py"]
+
+# 메타데이터 라벨
+LABEL maintainer="wesley"
+LABEL version="1.0.0"
+LABEL description="RAG 기반 Agentic AI 통계 분석 시스템"
+LABEL security.note="민감한 정보는 런타임 환경변수로 주입하세요"
+
+# Use an official Python runtime as a parent image
+FROM python:3.11-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the pyproject.toml and poetry.lock files into the container
+# We copy these first to leverage Docker's layer caching.
+COPY pyproject.toml poetry.lock* /app/
+
+# Install poetry
+RUN pip install poetry
+
+# Install project dependencies
+# --no-root: Don't install the project itself, only its dependencies
+# This is useful for creating a runtime environment for the sandbox
+RUN poetry install --no-root
+
+# The sandbox doesn't need the project source code, only the installed libraries.
+# The code to be executed will be mounted dynamically into the container.
+
+# This command is not strictly necessary for the sandbox, but can be useful for debugging.
+CMD ["python", "--version"] 

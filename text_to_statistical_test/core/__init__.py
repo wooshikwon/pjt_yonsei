@@ -1,17 +1,24 @@
 """
-Core 모듈: LLM Agent 기반 통계 검정 자동화 시스템의 핵심 구성 요소
+Core Package
 
-이 모듈은 워크플로우 관리, 상태 전이, 컨텍스트 관리 등 시스템의 핵심 로직을 포함합니다.
+Text-to-Statistical-Test 시스템의 핵심 로직을 담고 있는 '지휘자(Orchestrator)' 계층.
+- workflow: 5단계 파이프라인의 실행을 총괄하는 Orchestrator.
+- pipeline: 워크플로우를 구성하는 각 실행 단계(Step) 정의.
+- agent: 자율적으로 통계 분석을 수행하는 Agent.
+- reporting: 최종 결과 보고서를 생성하는 Builder.
 """
 
-from .agent import LLMAgent
-from .workflow_manager import WorkflowManager
-from .decision_engine import DecisionEngine
-from .context_manager import ContextManager
+from . import agent
+from . import pipeline
+from . import reporting
+from . import workflow
+
+__version__ = "1.0.0"
+__author__ = "Text-to-Statistical-Test Team"
 
 __all__ = [
-    'LLMAgent',
-    'WorkflowManager', 
-    'DecisionEngine',
-    'ContextManager'
+    'agent',
+    'pipeline',
+    'reporting',
+    'workflow',
 ] 

@@ -1,0 +1,18 @@
+Here is the complete context of the analysis. Synthesize these results into a structured, insightful summary according to your instructions.
+
+**1. Original Structured Request:**
+```json
+{structured_request}
+```
+
+**2. Executed Analysis Plan:**
+```json
+{analysis_plan}
+```
+
+**3. Raw Execution Results:**
+```json
+{execution_results}
+```
+
+Now, provide the final summary as a single JSON object. 

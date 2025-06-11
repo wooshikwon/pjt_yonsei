@@ -113,6 +113,9 @@ class ToolRegistry:
 
     def check_assumption(self, data: pd.DataFrame, test_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """통계 서비스의 check_assumptions 메서드를 호출합니다."""
+        # 중첩된 params 객체를 풀어서 서비스에 전달합니다.
+        # LLM이 {"params": {"group_col": "A", "value_col": "B"}} 와 같이 호출하면,
+        # 여기서는 {"group_col": "A", "value_col": "B"} 를 서비스에 전달합니다.
         return self.stats_service.check_assumptions(data=data, test_id=test_id, params=params)
 
     def run_posthoc_test(self, data: pd.DataFrame, test_id: str, **params) -> Dict[str, Any]:

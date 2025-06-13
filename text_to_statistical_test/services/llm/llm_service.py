@@ -1,161 +1,125 @@
-import logging
-import json
-import pandas as pd
-from typing import Dict, Any, List, Optional
-from pathlib import Path
+# 파일명: services/llm/llm_response_parser.py
+# JSON 스키마 검증 기능이 완벽하게 구현된 최종 버전
 
-from .llm_client import get_llm_client
-from .llm_response_parser import LLMResponseParser
-from config.settings import get_settings
-from services.rag.rag_service import RAGService
-from utils import LLMException, PromptException
-from utils.json_utils import CustomJSONEncoder
+import json
+import re
+import logging
+from typing import Dict, Any, List, Union
+
+# jsonschema 라이브러리 임포트
+from jsonschema import validate, ValidationError
+
+from utils import ParsingException
+from utils.error_handler import ErrorCode
 
 logger = logging.getLogger(__name__)
 
-class LLMService:
-    """
-    LLM 관련 기능들을 통합하여 고수준의 서비스를 제공하는 Facade 클래스.
-    모든 메소드는 비동기로 실행됩니다.
-    """
-    def __init__(self, rag_service: RAGService):
-        self.client = get_llm_client()
-        self.parser = LLMResponseParser()
-        self.rag_service = rag_service
-        # 프롬프트 템플릿이 있는 기본 디렉토리 설정
-        self.prompts_dir = Path(__file__).parent.parent.parent / "resources" / "prompts"
-        self.logger = logging.getLogger(__name__)
-        self.logger.info(f"LLMService가 초기화되었습니다. 프롬프트 디렉토리: {self.prompts_dir}")
+class LLMResponseParser:
+    """LLM의 텍스트 응답을 파싱하여 구조화된 데이터로 변환하고, 그 유효성을 검증합니다."""
 
-    def _load_prompt(self, prompt_path: str, **kwargs) -> str:
+    def __init__(self):
         """
-        파일에서 프롬프트 템플릿을 로드하고 주어진 context로 포맷팅합니다.
+        미리 정의된 응답 모델의 JSON 스키마를 초기화합니다.
+        이 스키마들은 LLM 응답의 구조적 유효성을 검증하는 데 사용됩니다.
         """
+        self._response_models = {
+            "StructuredRequest": {
+                "type": "object",
+                "properties": {
+                    "user_request": {"type": "string"},
+                    "hypotheses": {
+                        "type": "object",
+                        "properties": {
+                            "primary_hypothesis": {"type": "string"},
+                            "null_hypothesis": {"type": "string"},
+                            "alternative_hypothesis": {"type": "string"},
+                        },
+                        "required": ["primary_hypothesis", "null_hypothesis", "alternative_hypothesis"],
+                    },
+                    "variables": {
+                        "type": "object",
+                        "properties": {
+                            "dependent_variable": {"type": "string"},
+                            "independent_variables": {"type": "array", "items": {"type": "string"}},
+                            "categorical_variables": {"type": "array", "items": {"type": "string"}},
+                            "numerical_variables": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["dependent_variable", "independent_variables", "categorical_variables", "numerical_variables"],
+                    },
+                    "analysis_type": {
+                        "type": "object",
+                        "properties": {
+                            "category": {"type": "string"},
+                            "recommended_test": {"type": "string"},
+                        },
+                        "required": ["category", "recommended_test"],
+                    },
+                    "summary_for_agent": {"type": "string"},
+                },
+                "required": ["user_request", "hypotheses", "variables", "analysis_type", "summary_for_agent"],
+            },
+            # AnalysisPlan 및 다른 모델 스키마도 필요 시 여기에 추가할 수 있습니다.
+            # 실제 운영 시에는 이 스키마들을 더 상세하게 정의해야 합니다.
+            "AnalysisPlan": {"type": "object", "properties": {"steps": {"type": "array"}}, "required": ["steps"]},
+            "FinalSummary": {"type": "object"},
+        }
+
+    def get_response_model(self, model_name: str) -> Dict[str, Any]:
+        """정의된 응답 모델의 JSON 스키마를 반환합니다."""
+        model = self._response_models.get(model_name)
+        if not model:
+            raise ParsingException(f"'{model_name}'에 대한 응답 모델이 정의되지 않았습니다.", ErrorCode.MODEL_NOT_DEFINED)
+        return model
+
+    def parse_json_response(self, response_text: str, response_model_schema: Dict[str, Any]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        텍스트에서 JSON 객체 또는 배열을 추출하고, 제공된 스키마로 유효성을 검증합니다.
+        마크다운 코드 블록(```json ... ```)을 우선적으로 처리합니다.
+        """
+        if not isinstance(response_text, str):
+            raise ParsingException("파싱할 응답이 문자열이 아닙니다.", ErrorCode.VALIDATION_ERROR)
+
+        logger.debug(f"JSON 추출 및 검증 시도:\n{response_text[:500]}...")
+
         try:
-            full_path = self.prompts_dir / prompt_path
-            template = full_path.read_text(encoding="utf-8")
-            if kwargs:
-                return template.format(**kwargs)
-            return template
-        except FileNotFoundError:
-            raise PromptException(f"프롬프트 파일을 찾을 수 없습니다: {full_path}")
-        except KeyError as e:
-            raise PromptException(f"프롬프트 '{prompt_path}'에 필요한 키가 누락되었습니다: {e}")
-        except Exception as e:
-            raise PromptException(f"프롬프트 로딩 중 오류 발생: {e}")
+            # 패턴 1: ```json ... ``` 코드 블록 찾기
+            match = re.search(r"```json\s*([\s\S]*?)\s*```", response_text)
+            if match:
+                json_str = match.group(1).strip()
+            else:
+                # 패턴 2: 일반적인 JSON 객체 또는 배열 찾기 (가장 바깥쪽 {} 또는 []를 찾음)
+                first_brace = response_text.find('{')
+                first_bracket = response_text.find('[')
 
-    async def _get_structured_response(self, prompt: str, response_format: Dict[str, Any]) -> Dict[str, Any]:
-        """LLM 호출 및 구조화된 응답 파싱을 위한 내부 헬퍼 함수"""
-        try:
-            response_text = await self.client.generate_completion(
-                prompt=prompt,
-                temperature=get_settings().llm.temperature,
-                max_tokens=get_settings().llm.max_tokens,
-                is_json=True
-            )
-            return self.parser.parse_json_response(response_text, response_format)
-        except Exception as e:
-            self.logger.error(f"LLM 응답 파싱 중 오류 발생: {e}", exc_info=True)
-            # 구조화된 응답을 기대하는 곳에서 빈 딕셔너리나 적절한 기본값을 반환
-            return {"error": "Failed to get structured response from LLM", "details": str(e)}
+                if first_brace == -1 and first_bracket == -1:
+                    # JSON 모드로 응답했으나 코드 블록이나 괄호가 없는 순수 JSON 텍스트일 경우
+                    json_str = response_text
+                else:
+                    start_index = -1
+                    if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+                        start_index = first_brace
+                        start_char, end_char = '{', '}'
+                    elif first_bracket != -1:
+                        start_index = first_bracket
+                        start_char, end_char = '[', ']'
 
-    async def structure_user_request(
-        self,
-        user_request: str,
-        dataframe: pd.DataFrame
-    ) -> Dict[str, Any]:
-        """사용자 요청을 구조화된 분석 목표로 변환합니다."""
-        self.logger.debug("Structuring user request using LLM.")
-        system_prompt = self._load_prompt('request_structuring/system.prompt')
-        human_prompt = self._load_prompt(
-            'request_structuring/human.prompt',
-            user_request=user_request,
-            dataframe_head=dataframe.head().to_markdown(index=False),
-            dataframe_info=dataframe.info.__repr__()
-        )
-        
-        prompt = f"{system_prompt}\n\n{human_prompt}"
-        
-        response_model = self.parser.get_response_model("StructuredRequest")
-        return await self._get_structured_response(prompt, response_format=response_model)
+                    if start_index == -1:
+                        raise ParsingException("응답에서 JSON 시작 문자를 찾을 수 없습니다.", ErrorCode.PARSING_ERROR)
 
-    async def create_analysis_plan(
-        self,
-        structured_request: Dict[str, Any],
-        dataframe: pd.DataFrame,
-        tool_definitions: List[Dict[str, Any]],
-        knowledge_context: str = ""
-    ) -> Dict[str, Any]:
-        """LLM을 사용하여 상세한 자율 분석 계획을 생성합니다."""
-        self.logger.debug("Creating analysis plan using LLM with RAG context.")
+                    last_end_char = response_text.rfind(end_char)
+                    if last_end_char == -1:
+                         raise ParsingException("응답에서 JSON 닫는 문자를 찾을 수 없습니다.", ErrorCode.PARSING_ERROR)
 
-        human_prompt = self._load_prompt(
-            'analysis_planner/human.prompt',
-            structured_request=json.dumps(structured_request, indent=2, ensure_ascii=False, cls=CustomJSONEncoder),
-            dataframe_head=dataframe.head().to_markdown(index=False)
-        )
+                    json_str = response_text[start_index : last_end_char + 1]
 
-        # 시스템 프롬프트 로딩과 포맷팅을 한번에 처리
-        system_prompt = self._load_prompt(
-            'analysis_planner/system.prompt',
-            tool_definitions=json.dumps(tool_definitions, indent=2, ensure_ascii=False, cls=CustomJSONEncoder),
-            knowledge_context=knowledge_context
-        )
-        
-        prompt = f"{system_prompt}\n\n{human_prompt}"
-        
-        response_model = self.parser.get_response_model("AnalysisPlan")
-        return await self._get_structured_response(prompt, response_format=response_model)
+            # 1. JSON 형식으로 파싱
+            parsed_json = json.loads(json_str)
 
-    async def summarize_analysis_results(
-        self,
-        structured_request: Dict[str, Any],
-        analysis_plan: Dict[str, Any],
-        execution_results: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """실행된 모든 결과를 종합하여 최종 해석을 생성합니다."""
-        self.logger.debug("Summarizing analysis results using LLM.")
-        system_prompt = self._load_prompt('result_summarizer/system.prompt')
-        human_prompt = self._load_prompt(
-            'result_summarizer/human.prompt',
-            structured_request=json.dumps(structured_request, indent=2, ensure_ascii=False, cls=CustomJSONEncoder),
-            analysis_plan=json.dumps(analysis_plan, indent=2, ensure_ascii=False, cls=CustomJSONEncoder),
-            execution_results=json.dumps(execution_results, indent=2, ensure_ascii=False, cls=CustomJSONEncoder)
-        )
-        
-        prompt = f"{system_prompt}\n\n{human_prompt}"
-        
-        response_model = self.parser.get_response_model("FinalSummary")
-        return await self._get_structured_response(prompt, response_format=response_model)
-
-    async def generate_report_content(
-        self,
-        user_request: str,
-        analysis_results: Dict[str, Any],
-        visualization_paths: List[str],
-        knowledge_context: str = ""
-    ) -> str:
-        """모든 분석 결과를 종합하여 최종 보고서의 Markdown 콘텐츠를 생성합니다."""
-        self.logger.debug("Generating final report content using LLM with RAG context.")
-        system_prompt = self._load_prompt('report_generator/system.prompt')
-        human_prompt = self._load_prompt(
-            'report_generator/human.prompt',
-            user_request=user_request,
-            analysis_summary=json.dumps(analysis_results, indent=2, ensure_ascii=False, cls=CustomJSONEncoder),
-            visualization_paths=json.dumps(visualization_paths, indent=2, ensure_ascii=False, cls=CustomJSONEncoder),
-            knowledge_context=knowledge_context
-        )
-        
-        prompt = f"{system_prompt}\n\n{human_prompt}"
-        
-        # 보고서 내용은 자유 형식이므로 일반 텍스트로 받음
-        try:
-            return await self.client.generate_completion(
-                prompt=prompt,
-                temperature=get_settings().llm.temperature,
-                max_tokens=get_settings().llm.max_tokens,
-                is_json=False
-            )
-        except Exception as e:
-            self.logger.error(f"보고서 콘텐츠 생성 중 오류 발생: {e}", exc_info=True)
-            return f"## 보고서 생성 오류\n\n보고서 콘텐츠를 생성하는 중 오류가 발생했습니다:\n\n```\n{e}\n```"
+            # 2. 파싱된 JSON 객체를 스키마와 대조하여 유효성 검증
+            try:
+                validate(instance=parsed_json, schema=response_model_schema)
+                logger.debug(f"JSON 스키마 검증 성공. (스키마 이름: {response_model_schema.get('title', 'N/A')})")
+                return parsed_json
+            except ValidationError as e:
+                error_message = f"LLM 응답이 정의된 스키마를 따르지 않습니다. 오류: {e.message}"
+                logger

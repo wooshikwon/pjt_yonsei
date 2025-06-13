@@ -8,7 +8,7 @@ import pandas as pd
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.workflow.orchestrator import Orchestrator
+from core.pipeline.orchestrator import Orchestrator
 from config.settings import get_settings
 from services.rag.rag_service import RAGService
 

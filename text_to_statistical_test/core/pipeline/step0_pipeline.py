@@ -1,7 +1,8 @@
-# 파일명: core/pipeline/base_pipeline_step.py
 """
 파이프라인 단계의 추상 기반 클래스(Abstract Base Class)를 정의합니다.
 """
+
+from core.pipeline.app_context import AppContext
 
 import logging
 from abc import ABC, abstractmethod
@@ -29,19 +30,18 @@ class PipelineStep(ABC):
         return self._step_name
 
     @abstractmethod
-    async def run(self, context: Dict[str, Any]) -> Dict[str, Any] | Coroutine[Any, Any, Dict[str, Any]]:
+    # [수정] 반환 타입을 명확한 AppContext로 변경
+    async def run(self, context: AppContext) -> AppContext:
         """
         각 단계의 핵심 로직을 실행합니다.
         
         Args:
-            context: 워크플로우의 현재 상태를 담고 있는 딕셔너리.
-                     이전 단계들로부터 전달된 모든 데이터를 포함합니다.
+            context: 워크플로우의 현재 상태를 담고 있는 AppContext 객체.
 
         Returns:
-            context를 업데이트할 새로운 데이터가 담긴 딕셔너리.
-            이 딕셔너리는 기존 context에 병합됩니다.
+            업데이트된 AppContext 객체.
         """
-        pass 
+        pass
 
     def __str__(self) -> str:
         return f"PipelineStep(name='{self.step_name}')" 

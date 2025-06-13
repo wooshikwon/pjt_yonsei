@@ -40,8 +40,10 @@ TEST_DISPATCHER = {
 }
 
 
-# [!!!] 효과 크기 파라미터 준비 함수들 정의
+# 효과 크기 파라미터 준비 함수들 정의
 def _prepare_cohens_d_params(data, params):
+    """Cohen's d 계산에 필요한 두 그룹의 데이터를 준비합니다."""
+    # 이 함수는 test_results가 필요 없으므로 변경되지 않습니다.
     groups = data[params['group_col']].unique()
     return {
         'group1': data[data[params['group_col']] == groups[0]][params['value_col']],
@@ -49,7 +51,9 @@ def _prepare_cohens_d_params(data, params):
     }
 
 def _prepare_eta_squared_params(data, params):
-    test_results = params.get('test_results', {}).get('test_results', {})
+    """Eta-squared 계산에 필요한 F-statistic과 자유도를 준비합니다."""
+    # '계획 2' 적용: 이제 params['test_results']는 바로 실제 결과 딕셔너리입니다.
+    test_results = params.get('test_results', {})
     df_between = data[params['group_col']].nunique() - 1
     df_within = len(data) - data[params['group_col']].nunique()
     return {
@@ -59,11 +63,15 @@ def _prepare_eta_squared_params(data, params):
     }
     
 def _prepare_partial_eta_squared_params(data, params):
-    test_results = params.get('test_results', {}).get('test_results', {})
+    """Partial Eta-squared 계산에 필요한 anova_table을 준비합니다."""
+    # '계획 2' 적용
+    test_results = params.get('test_results', {})
     return {'anova_table': test_results.get('anova_table')}
     
 def _prepare_cramers_v_params(data, params):
-    test_results = params.get('test_results', {}).get('test_results', {})
+    """Cramer's V 계산에 필요한 chi2_stat, 샘플 수, 분할표를 준비합니다."""
+    # '계획 2' 적용
+    test_results = params.get('test_results', {})
     return {
         'chi2_stat': test_results.get('chi2_statistic'),
         'n': len(data),
@@ -71,14 +79,15 @@ def _prepare_cramers_v_params(data, params):
     }
 
 def _prepare_cohens_h_params(data, params):
-    test_results = params.get('test_results', {}).get('test_results', {})
+    """Cohen's h 계산에 필요한 두 비율 값을 준비합니다."""
+    # '계획 2' 적용
+    test_results = params.get('test_results', {})
     proportions = test_results.get('_internal_proportions')
     if not proportions or len(proportions) != 2:
          raise ValueError("두 표본 비율 검사의 효과 크기를 계산하기 위한 비율(proportion) 값이 없습니다.")
     return {'prop1': proportions[0], 'prop2': proportions[1]}
 
 
-# [!!!] 수정된 효과 크기 계산 함수 매핑
 EFFECT_SIZE_DISPATCHER = {
     'independent_t_test': {
         'function': effect_sizes.calculate_cohens_d, 
@@ -102,17 +111,22 @@ EFFECT_SIZE_DISPATCHER = {
     },
     'logistic_regression': {
         'function': lambda test_results: {'odds_ratios': test_results.get('odds_ratios')},
-        'preparer': lambda data, params: {'test_results': params.get('test_results', {}).get('test_results', {})}
+        'preparer': lambda data, params: {'test_results': params.get('test_results', {})}
     },
 }
 
-# --- 사후 분석 함수 매핑 (변경 없음) ---
+# --- 사후 분석 함수 매핑 ---
 POSTHOC_DISPATCHER = {
-    'one_way_anova': posthoc.run_tukey_hsd,
-    'two_way_anova': posthoc.run_tukey_hsd,
+    'one_way_anova': {
+        'function': posthoc.run_tukey_hsd,
+        'required_params': ['group_col', 'value_col']
+    },
+    'two_way_anova': {
+        'function': posthoc.run_tukey_hsd,
+        'required_params': ['dependent_var', 'independent_vars']
+    }
 }
-
-# --- 가정 검토 함수 매핑 (변경 없음) ---
+# --- 가정 검토 함수 매핑 ---
 ASSUMPTION_CHECKER_MAP = {
     'normality': assumptions.check_normality,
     'homoscedasticity': assumptions.check_equal_variance,

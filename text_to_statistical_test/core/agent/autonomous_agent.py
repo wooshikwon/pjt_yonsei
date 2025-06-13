@@ -1,26 +1,19 @@
 # autonomous_agent.py
-"""
-Autonomous Agent for Statistical Analysis
-
-LLM을 사용하여 통계 분석의 계획, 실행, 해석을 자율적으로 수행하는 에이전트.
-'Orchestrator-Engine' 모델에 따라, 복잡한 로직은 서비스 계층에 위임하고
-자신은 'Plan-Execute-Interpret'의 핵심 흐름을 담당한다.
-"""
 
 import logging
 from typing import Dict, Any, List, Optional
 import pandas as pd
-from dataclasses import dataclass, field # [!!!] 추가
+from dataclasses import dataclass
 
 from services.llm.llm_service import LLMService
-from services import statistics_service
+from services.statistics.stats_service import StatisticsService
 from .tools import ToolRegistry
 
 
-# [!!!] 실행 컨텍스트를 위한 데이터 클래스 정의
+# 실행 컨텍스트를 위한 데이터 클래스 정의
 @dataclass
-class ExecutionContext:
-    """분석 계획 실행 중 단계 간에 전달될 컨텍스트."""
+class AgentRunState:
+    """분석 계획 실행 중 단계 간 상태를 명시적으로 관리하는 내부 상태 객체."""
     dataframe: pd.DataFrame
     last_test_result: Optional[Dict[str, Any]] = None
     last_test_params: Optional[Dict[str, Any]] = None
@@ -31,10 +24,11 @@ class AutonomousAgent:
     자율적으로 통계 분석을 수행하는 주체.
     """
     
-    def __init__(self, llm_service: LLMService):
+    def __init__(self, llm_service: LLMService, stats_service: StatisticsService):
         self.logger = logging.getLogger(__name__)
         self.llm_service = llm_service
-        self.tool_registry = ToolRegistry(stats_service=statistics_service)
+        self.tool_registry = ToolRegistry(stats_service=stats_service)
+        self.state: Optional[AgentRunState] = None
         self.logger.info(f"AutonomousAgent 초기화 완료. 사용 가능한 도구: {len(self.tool_registry.get_tool_definitions())}개")
 
     async def run_analysis(
@@ -48,15 +42,19 @@ class AutonomousAgent:
         '계획 수립 -> 도구 실행 -> 결과 종합'의 3단계 워크플로우를 따릅니다.
         """
         print("\n" + "="*15 + " 자율 분석 시작 " + "="*15)
-        tool_definitions = self.tool_registry.get_tool_definitions()
 
+        # [수정] 에이전트 실행 시 상태 객체를 생성하여 인스턴스 변수에 할당합니다.
+        self.state = AgentRunState(dataframe=dataframe)
+
+        tool_definitions = self.tool_registry.get_tool_definitions()
         analysis_plan = await self._create_analysis_plan(
             structured_request, dataframe, tool_definitions, knowledge_context
         )
         if not analysis_plan or not analysis_plan.get('steps'):
             raise RuntimeError("LLM을 통해 분석 계획을 수립하는 데 실패했습니다.")
 
-        execution_results = await self._execute_plan(analysis_plan, dataframe)
+        # [수정] _execute_plan 호출 시 더 이상 dataframe을 전달하지 않습니다.
+        execution_results = await self._execute_plan(analysis_plan)
 
         final_summary = await self._interpret_results(
             structured_request=structured_request,
@@ -94,19 +92,17 @@ class AutonomousAgent:
             self.logger.error(f"분석 계획 수립 중 오류: {e}", exc_info=True)
             return {}
 
-    # [!!!] ExecutionContext를 사용하도록 완전히 새로워진 _execute_plan 메서드
+    # [수정] 메서드 시그니처에서 불필요한 dataframe 파라미터를 제거합니다.
     async def _execute_plan(
         self,
-        analysis_plan: Dict[str, Any],
-        dataframe: pd.DataFrame
+        analysis_plan: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """
         수립된 계획에 따라 각 단계를 순차적으로 실행하고, 도구를 사용합니다.
-        ExecutionContext를 통해 단계 간 상태를 명시적으로 관리합니다.
+        self.state를 통해 단계 간 상태를 명시적으로 관리합니다.
         """
         print("-> (2/3) 분석 계획 실행 중...")
         results = []
-        context = ExecutionContext(dataframe=dataframe)
 
         for i, step in enumerate(analysis_plan.get("steps", [])):
             tool_name = step.get("tool_name")
@@ -120,30 +116,26 @@ class AutonomousAgent:
             
             final_params = params.copy()
             try:
-                # 1. 컨텍스트를 사용하여 파라미터 준비
-                if tool_name in ["calculate_effect_size", "run_posthoc_test"] and context.last_test_params:
-                    merged_params = context.last_test_params.copy()
-                    merged_params.update(final_params)
-                    final_params = merged_params
-                
-                if tool_name == "calculate_effect_size" and context.last_test_result:
-                    final_params["test_results"] = context.last_test_result
+                # [수정] 존재하지 않는 지역 변수 'context' 대신 'self.state'를 사용합니다.
+                if tool_name == "calculate_effect_size" and self.state.last_test_result:
+                    self.logger.info("이전 테스트 결과를 'calculate_effect_size'의 컨텍스트로 전달합니다.")
+                    final_params["test_results"] = self.state.last_test_result.get("test_results", {})
 
-                # 2. 도구 실행
+                # 도구 실행
                 tool_function = self.tool_registry.get_tool(tool_name)
                 self.logger.info(f"'{tool_name}' 실행. 파라미터: {final_params}")
-                result = tool_function(data=context.dataframe, **final_params)
+                result = tool_function(data=self.state.dataframe, **final_params)
                 
-                # 3. 컨텍스트 업데이트
+                # 컨텍스트 업데이트 시 'self.state'를 사용
                 if tool_name == "run_statistical_test":
                     self.logger.info(f"'{tool_name}'의 결과와 파라미터를 컨텍스트에 저장합니다.")
-                    context.last_test_result = result
-                    context.last_test_params = final_params.copy()
+                    self.state.last_test_result = result
+                    self.state.last_test_params = final_params.copy()
 
                 step_result = {
                     "step_name": step_name,
                     "tool_name": tool_name,
-                    "params": final_params, # 실행에 사용된 최종 파라미터를 기록
+                    "params": final_params,
                     "output": result,
                     "status": "SUCCESS"
                 }

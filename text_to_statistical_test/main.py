@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 try:
     from config.logging_config import setup_logging
     from config.settings import get_settings
-    from core.workflow.orchestrator import Orchestrator
+    from core.pipeline.orchestrator import Orchestrator
     # 서비스 모듈을 임포트하여 모든 서비스가 초기화되도록 합니다.
     import services
 except ImportError as e:

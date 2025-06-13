@@ -3,8 +3,8 @@
 import logging
 from typing import Dict, Any
 
-from core.context import AppContext
-from core.pipeline.pipeline_step import PipelineStep
+from core.pipeline.app_context import AppContext
+from core.pipeline.step0_pipeline import PipelineStep
 from utils.data_loader import DataLoader # helpers가 아닌 data_loader에서 DataLoader를 임포트
 # [Note] UI 관련 로직 (ui_helpers)은 main.py로 이동되어 해당 의존성을 제거했습니다.
 

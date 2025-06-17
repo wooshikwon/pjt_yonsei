@@ -18,12 +18,20 @@ Dockerfile
 # OS-specific
 .DS_Store
 
-# Sensitive files
+# Sensitive files (handled via volume mount)
 .env
 
-# Output and logs
+# Output and logs (created at runtime)
 output_data/
-resources/vector_store/
+logs/
+
+# Development files
 factoring_log.md
 BLUEPRINT.md
-README.md 
+README.md
+
+# Deprecated paths
+resources/vector_store/
+
+# Tests
+tests/ 

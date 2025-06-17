@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  statistical-analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: text-to-statistical-test
+    volumes:
+      # 환경변수 파일 마운트 (보안: read-only, 로컬 파일만)
+      - ./.env:/app/.env:ro
+      # 입력 데이터 마운트 (로컬에서 파일 업데이트 가능)
+      - ./input_data:/app/input_data:ro
+      # 출력 데이터 마운트 (결과 파일 로컬에서 확인 가능)
+      - ./output_data:/app/output_data
+      # 로그 마운트 (로그 파일 로컬에서 확인 가능)
+      - ./logs:/app/logs
+      # RAG 인덱스 마운트 (캐시 유지)
+      - ./resources/rag_index:/app/resources/rag_index
+    environment:
+      - PYTHONPATH=/app
+    # 사용법: docker-compose run --rm statistical-analyzer --file <filename> --request "<request>" 

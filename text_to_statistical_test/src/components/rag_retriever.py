@@ -2,6 +2,16 @@ import os
 import shutil
 from pathlib import Path
 from typing import List
+import logging
+import warnings
+import sys
+import io
+import contextlib
+
+# 라이브러리 로깅 및 경고 메시지 숨기기
+warnings.filterwarnings("ignore")
+logging.getLogger("llama_index").setLevel(logging.ERROR)
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 
 # LlamaIndex 관련 임포트
 from llama_index.core import (
@@ -17,6 +27,20 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 # FAISS 라이브러리 임포트
 import faiss
+
+# 파일 로깅용 로거 (상세 정보를 파일에만 기록)
+file_logger = logging.getLogger("file_logger")
+
+@contextlib.contextmanager
+def suppress_stdout():
+    """stdout 출력을 일시적으로 차단하는 컨텍스트 매니저"""
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
 
 class RAGRetriever:
     """
@@ -49,25 +73,26 @@ class RAGRetriever:
         rebuild 플래그가 True이면 기존 인덱스를 삭제하고 다시 빌드합니다.
         """
         if self.rebuild and self.vector_store_path.exists():
-            print("INFO: Rebuild flag is set. Deleting existing index.")
+            file_logger.info("Rebuild flag is set. Deleting existing index.")
             shutil.rmtree(self.vector_store_path)
 
         # docstore.json 존재 여부로 기존 인덱스 확인
         if (self.vector_store_path / "docstore.json").exists():
-            print("INFO: Loading existing index from storage.")
+            file_logger.info("Loading existing index from storage.")
             try:
-                vector_store = FaissVectorStore.from_persist_dir(str(self.vector_store_path))
-                storage_context = StorageContext.from_defaults(
-                    vector_store=vector_store, persist_dir=str(self.vector_store_path)
-                )
-                self.index = load_index_from_storage(storage_context=storage_context)
-                print("INFO: Index loaded successfully.")
+                with suppress_stdout():  # LlamaIndex 로딩 메시지 숨기기
+                    vector_store = FaissVectorStore.from_persist_dir(str(self.vector_store_path))
+                    storage_context = StorageContext.from_defaults(
+                        vector_store=vector_store, persist_dir=str(self.vector_store_path)
+                    )
+                    self.index = load_index_from_storage(storage_context=storage_context)
+                file_logger.info("Index loaded successfully.")
             except Exception as e:
-                print(f"ERROR: Failed to load index, which may be corrupted. Rebuilding... Error: {e}")
+                file_logger.error(f"Failed to load index, which may be corrupted. Rebuilding... Error: {e}")
                 shutil.rmtree(self.vector_store_path)
                 self._build_index()
         else:
-            print("INFO: No existing index found. Building a new one...")
+            file_logger.info("No existing index found. Building a new one...")
             self._build_index()
 
     def _build_index(self) -> None:
@@ -78,17 +103,19 @@ class RAGRetriever:
         documents = SimpleDirectoryReader(str(self.knowledge_base_path)).load_data()
         
         if not documents:
-            print(f"WARNING: No documents found in {self.knowledge_base_path}. Skipping index creation.")
+            file_logger.warning(f"No documents found in {self.knowledge_base_path}. Skipping index creation.")
             return
 
-        # FAISS 벡터 스토어 초기화
-        d = 768  # 'ko-sroberta-multitask' 모델의 임베딩 차원
-        faiss_index = faiss.IndexFlatL2(d)
-        vector_store = FaissVectorStore(faiss_index=faiss_index)
-        storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        self.index = VectorStoreIndex.from_documents(documents, storage_context=storage_context)
-        self.index.storage_context.persist(persist_dir=str(self.vector_store_path))
-        print(f"INFO: New index built and saved to {self.vector_store_path}")
+        with suppress_stdout():  # 인덱스 빌드 시 출력 메시지 숨기기
+            # FAISS 벡터 스토어 초기화
+            d = 768  # 'ko-sroberta-multitask' 모델의 임베딩 차원
+            faiss_index = faiss.IndexFlatL2(d)
+            vector_store = FaissVectorStore(faiss_index=faiss_index)
+            storage_context = StorageContext.from_defaults(vector_store=vector_store)
+            self.index = VectorStoreIndex.from_documents(documents, storage_context=storage_context)
+            self.index.storage_context.persist(persist_dir=str(self.vector_store_path))
+        
+        file_logger.info(f"New index built and saved to {self.vector_store_path}")
 
     def retrieve_context(self, query_text: str, similarity_top_k: int = 3) -> str:
         """
@@ -107,8 +134,9 @@ class RAGRetriever:
         if self.index is None:
             raise RuntimeError("Index has not been loaded. Please call 'load()' first.")
 
-        retriever = self.index.as_retriever(similarity_top_k=similarity_top_k)
-        retrieved_nodes = retriever.retrieve(query_text)
+        with suppress_stdout():  # 검색 시 출력 메시지 숨기기
+            retriever = self.index.as_retriever(similarity_top_k=similarity_top_k)
+            retrieved_nodes = retriever.retrieve(query_text)
         
         # 검색된 노드의 텍스트를 하나의 문자열로 결합
         return "\n".join([node.get_content() for node in retrieved_nodes])
@@ -120,7 +148,6 @@ class RAGRetriever:
         """
         # 이 메서드는 이제 retrieve_context로 대체되었습니다.
         # 하위 호환성을 위해 경고를 출력하고 새 메서드를 호출합니다.
-        import warnings
         warnings.warn(
             "`query` is deprecated and will be removed in a future version. "
             "Use `retrieve_context` instead for pure context retrieval.",

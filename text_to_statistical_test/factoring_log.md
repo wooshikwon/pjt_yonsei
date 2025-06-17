@@ -29,3 +29,11 @@
 - 2024-07-25: **모듈 경로 문제 해결**: `src/main.py` 실행 시 `ModuleNotFoundError` 해결. `python -m src.main` 방식으로 실행하도록 수정.
 - 2024-07-25: `src/agent.py`에 `_clean_code_response()` 메서드 추가. LLM이 생성하는 코드에서 markdown 백틱 제거하여 `SyntaxError` 방지.
 - 2024-07-25: **🎉 전체 시스템 동작 성공**: RAG 컨텍스트 강화부터 최종 보고서 생성까지 모든 파이프라인이 정상 동작함을 확인. `normal_sales.csv` 데이터로 A팀과 B팀 성과 차이 분석 완료.
+- 2024-07-25: **로깅 시스템 구축**: `src/utils/logger.py` 생성으로 날짜별 상세 로그 파일 저장 및 터미널 출력 간소화 시스템 구현.
+- 2024-07-25: `src/main.py` 로깅 시스템 적용. 단계별 진행 상황만 터미널에 표시하고 상세 정보는 `logs/` 디렉토리에 저장.
+- 2024-07-25: `src/components/rag_retriever.py` 로깅 개선. print 출력을 파일 로깅으로 대체하여 터미널 출력 정리.
+- 2024-07-25: **예제 데이터 생성**: `team_sales_performance.csv`, `customer_survey.csv` 통계 검정용 샘플 데이터 생성.
+- 2024-07-25: **✅ 로깅 시스템 동작 확인**: 터미널은 단계별 진행상황만 표시, 상세 로그는 `logs/analysis_YYYYMMDD.log`에 자동 저장. 깔끔한 최종 보고서 출력 완료.
+- 2024-07-25: **터미널 출력 완전 정리**: HuggingFace tokenizers, scipy 경고, LlamaIndex 로딩 메시지 등 모든 라이브러리 출력을 숨김 처리.
+- 2024-07-25: `src/main.py`, `src/components/code_executor.py`, `src/components/rag_retriever.py`에 경고 및 출력 억제 코드 추가.
+- 2024-07-25: **🎯 최종 완성**: 터미널은 단계별 진행 상황과 최종 보고서만 깔끔하게 표시. 모든 기술적 메시지는 로그 파일로 분리 완료.

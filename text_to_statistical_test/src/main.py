@@ -4,15 +4,27 @@ from pathlib import Path
 from datetime import datetime
 import sys
 import os
+import warnings
 from dotenv import load_dotenv
+
+# 경고 메시지 및 라이브러리 출력 숨기기 설정
+os.environ["TOKENIZERS_PARALLELISM"] = "false"  # HuggingFace tokenizers 경고 숨기기
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"  # HuggingFace transformers 로그 레벨 설정
+warnings.filterwarnings("ignore")  # Python 경고 메시지 숨기기
+
+# .env 파일 로드
+load_dotenv()
+
+# 추가 라이브러리 경고 숨기기
+import logging
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
 
 from src.components.context import Context
 from src.components.rag_retriever import RAGRetriever
 from src.components.code_executor import CodeExecutor
 from src.agent import Agent
-
-# .env 파일 로드
-load_dotenv()
+from src.utils.logger import get_logger
 
 app = typer.Typer()
 
@@ -24,8 +36,11 @@ def analyze(
     """
     데이터 파일과 사용자 요청을 기반으로 전체 통계 분석 파이프라인을 실행합니다.
     """
+    # 로거 초기화
+    logger = get_logger()
+    
     # --- 초기화 ---
-    print("--- Initializing System ---")
+    logger.log_system_info("시스템 초기화 중...")
     
     # 환경변수 읽기
     use_rag = os.getenv("USE_RAG", "True").lower() == "true"
@@ -35,7 +50,7 @@ def analyze(
     base_path = Path.cwd()
     input_file_path = base_path / "input_data/data_files" / file_name
     knowledge_base_path = str(base_path / "resources/knowledge_base")
-    vector_store_path = str(base_path / "resources/rag_index") # 경로 변경
+    vector_store_path = str(base_path / "resources/rag_index")
     report_path = base_path / "output_data/reports"
     report_path.mkdir(parents=True, exist_ok=True)
 
@@ -45,26 +60,32 @@ def analyze(
     executor = CodeExecutor()
 
     context.set_user_input(file_path=str(input_file_path), request=request)
-    print(f"User Request: {request}")
-    print(f"Data File: {input_file_path}")
+    logger.log_detailed(f"User Request: {request}")
+    logger.log_detailed(f"Data File: {input_file_path}")
 
     # --- Step 1: RAG로 컨텍스트 강화 (조건부 실행) ---
     if use_rag:
-        print("\n--- Step 1: Enhancing Context with RAG ---")
+        logger.log_step_start(1, "RAG 컨텍스트 강화")
         retriever = RAGRetriever(
             knowledge_base_path=knowledge_base_path, 
             vector_store_path=vector_store_path,
             rebuild=rebuild_vector_store
         )
-        retriever.load()
-        rag_context = retriever.retrieve_context(request)
-        context.add_rag_result(rag_context)
-        print(f"RAG Context: {rag_context}")
+        try:
+            retriever.load()
+            rag_context = retriever.retrieve_context(request)
+            context.add_rag_result(rag_context)
+            logger.log_rag_context(rag_context)
+            logger.log_step_success(1, "지식 베이스에서 관련 정보 검색 완료")
+        except Exception as e:
+            logger.log_step_failure(1, str(e))
+            logger.log_detailed(f"RAG Error: {e}", "ERROR")
     else:
-        print("\n--- Step 1: Skipping RAG as per .env configuration ---")
+        logger.log_step_start(1, "RAG 건너뛰기")
+        logger.log_step_success(1, "환경 설정에 따라 RAG 단계 생략")
 
     # --- Step 2: 데이터 로딩 및 초기 탐색 ---
-    print("\n--- Step 2: Loading and Exploring Data ---")
+    logger.log_step_start(2, "데이터 로딩 및 탐색")
     try:
         if input_file_path.suffix == '.csv':
             df = pd.read_csv(input_file_path)
@@ -74,79 +95,111 @@ def analyze(
             df = pd.read_parquet(input_file_path)
         else:
             raise ValueError(f"Unsupported file type: {input_file_path.suffix}")
-        print("Data loaded successfully.")
+        
+        logger.log_detailed(f"Data shape: {df.shape}")
+        logger.log_detailed(f"Columns: {list(df.columns)}")
+        logger.log_step_success(2, f"데이터 로딩 완료 ({df.shape[0]}행, {df.shape[1]}열)")
     except FileNotFoundError:
-        print(f"Error: The file '{input_file_path}' was not found.")
+        error_msg = f"파일을 찾을 수 없습니다: {input_file_path}"
+        logger.log_step_failure(2, error_msg)
+        logger.log_detailed(error_msg, "ERROR")
         sys.exit(1)
     except Exception as e:
-        print(f"An error occurred while loading the data: {e}")
+        error_msg = f"데이터 로딩 중 오류 발생: {e}"
+        logger.log_step_failure(2, error_msg)
+        logger.log_detailed(error_msg, "ERROR")
         sys.exit(1)
 
     # --- Step 3: 통계 분석 계획 수립 ---
-    print("\n--- Step 3: Generating Analysis Plan ---")
-    schema = {col: str(dtype) for col, dtype in df.dtypes.to_dict().items()}
-    null_values = df.isnull().sum().to_dict()
-    sample_data = df.head().to_string()
-    context.set_data_info(schema=schema, null_values=null_values, sample_data=sample_data)
+    logger.log_step_start(3, "분석 계획 수립")
+    try:
+        schema = {col: str(dtype) for col, dtype in df.dtypes.to_dict().items()}
+        null_values = df.isnull().sum().to_dict()
+        sample_data = df.head().to_string()
+        context.set_data_info(schema=schema, null_values=null_values, sample_data=sample_data)
 
-    plan = agent.generate_analysis_plan(context)
-    context.set_analysis_plan(plan)
-    print("Generated Analysis Plan:")
-    for i, step in enumerate(plan, 1):
-        print(f"{i}. {step}")
+        plan = agent.generate_analysis_plan(context)
+        context.set_analysis_plan(plan)
+        
+        logger.log_detailed("Generated Analysis Plan:")
+        for i, step in enumerate(plan, 1):
+            logger.log_detailed(f"{i}. {step}")
+        
+        logger.log_step_success(3, f"분석 계획 수립 완료 ({len(plan)}단계)")
+    except Exception as e:
+        logger.log_step_failure(3, str(e))
+        logger.log_detailed(f"Analysis planning error: {e}", "ERROR")
+        sys.exit(1)
     
-    # --- Step 4 & 5: 계획 기반 실행 및 자가 수정 루프 ---
-    print("\n--- Step 4: Executing Analysis Plan ---")
-    for i, step in enumerate(context.analysis_plan):
-        print(f"\nExecuting Step {i+1}: {step}")
-        
-        code = agent.generate_code_for_step(context, step)
-        print("Generated Code:\n" + code)
+    # --- Step 4: 계획 기반 실행 및 자가 수정 루프 ---
+    logger.log_step_start(4, "분석 계획 실행")
+    try:
+        failed_steps = 0
+        for i, step in enumerate(context.analysis_plan):
+            step_num = i + 1
+            logger.log_detailed(f"\nExecuting Step {step_num}: {step}")
+            
+            code = agent.generate_code_for_step(context, step)
+            logger.log_generated_code(step_num, code)
 
-        result, success = executor.run(code, global_vars={'df': df})
-        
-        if success:
-            print("Execution Result:\n" + result)
-            context.add_to_history({'role': 'assistant', 'code': code})
-            context.add_to_history({'role': 'system', 'result': result})
-        else:
-            print("Execution Failed. Error:\n" + result)
-            context.add_to_history({'role': 'assistant', 'code': code})
-            context.add_to_history({'role': 'system', 'error': result})
-            
-            print("\n--- Initiating Self-Correction ---")
-            corrected_code = agent.self_correct_code(context, step, code, result)
-            print("Corrected Code:\n" + corrected_code)
-            
-            result, success = executor.run(corrected_code, global_vars={'df': df})
+            result, success = executor.run(code, global_vars={'df': df})
+            logger.log_execution_result(step_num, result, success)
             
             if success:
-                print("Execution Result after correction:\n" + result)
-                context.add_to_history({'role': 'assistant', 'code': corrected_code})
+                context.add_to_history({'role': 'assistant', 'code': code})
                 context.add_to_history({'role': 'system', 'result': result})
             else:
-                print("FATAL: Self-correction failed. Aborting analysis.")
-                print("Final Error:\n" + result)
-                sys.exit(1)
+                logger.log_detailed(f"Step {step_num} failed, attempting self-correction...")
+                context.add_to_history({'role': 'assistant', 'code': code})
+                context.add_to_history({'role': 'system', 'error': result})
+                
+                corrected_code = agent.self_correct_code(context, step, code, result)
+                logger.log_detailed(f"Corrected code generated for step {step_num}")
+                
+                result, success = executor.run(corrected_code, global_vars={'df': df})
+                logger.log_execution_result(step_num, f"CORRECTED: {result}", success)
+                
+                if success:
+                    context.add_to_history({'role': 'assistant', 'code': corrected_code})
+                    context.add_to_history({'role': 'system', 'result': result})
+                else:
+                    failed_steps += 1
+                    logger.log_detailed(f"FATAL: Self-correction failed for step {step_num}")
+        
+        if failed_steps == 0:
+            logger.log_step_success(4, f"모든 분석 단계 성공적으로 완료")
+        else:
+            logger.log_step_success(4, f"분석 완료 (일부 단계 실패: {failed_steps}개)")
+            
+    except Exception as e:
+        logger.log_step_failure(4, str(e))
+        logger.log_detailed(f"Analysis execution error: {e}", "ERROR")
+        sys.exit(1)
     
-    # --- Step 6: 최종 보고서 생성 ---
-    print("\n--- Step 5: Generating Final Report ---")
-    final_report = agent.generate_final_report(context)
-    context.set_final_report(final_report)
+    # --- Step 5: 최종 보고서 생성 ---
+    logger.log_step_start(5, "최종 보고서 생성")
+    try:
+        final_report = agent.generate_final_report(context)
+        context.set_final_report(final_report)
+        logger.log_step_success(5, "보고서 생성 완료")
+    except Exception as e:
+        logger.log_step_failure(5, str(e))
+        logger.log_detailed(f"Report generation error: {e}", "ERROR")
+        final_report = "보고서 생성 중 오류가 발생했습니다."
     
-    # --- Step 7: 결과 출력 및 저장 ---
-    print("\n\n" + "="*20 + " FINAL REPORT " + "="*20)
-    print(final_report)
-    print("="*54)
+    # --- 결과 출력 및 저장 ---
+    logger.print_final_report(final_report)
     
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     report_file_name = f"report-{timestamp}.md"
     report_file_path = report_path / report_file_name
     
-    with open(report_file_path, 'w', encoding='utf-8') as f:
-        f.write(final_report)
-        
-    print(f"\nReport saved to: {report_file_path}")
+    try:
+        with open(report_file_path, 'w', encoding='utf-8') as f:
+            f.write(final_report)
+        logger.log_report_saved(str(report_file_path))
+    except Exception as e:
+        logger.log_detailed(f"Failed to save report: {e}", "ERROR")
 
 if __name__ == "__main__":
     app() 

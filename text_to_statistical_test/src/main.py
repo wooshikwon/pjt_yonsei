@@ -3,11 +3,16 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime
 import sys
+import os
+from dotenv import load_dotenv
 
 from src.components.context import Context
 from src.components.rag_retriever import RAGRetriever
 from src.components.code_executor import CodeExecutor
 from src.agent import Agent
+
+# .env 파일 로드
+load_dotenv()
 
 app = typer.Typer()
 
@@ -22,17 +27,20 @@ def analyze(
     # --- 초기화 ---
     print("--- Initializing System ---")
     
+    # 환경변수 읽기
+    use_rag = os.getenv("USE_RAG", "True").lower() == "true"
+    rebuild_vector_store = os.getenv("REBUILD_VECTOR_STORE", "False").lower() == "true"
+
     # 경로 설정
     base_path = Path.cwd()
     input_file_path = base_path / "input_data/data_files" / file_name
     knowledge_base_path = str(base_path / "resources/knowledge_base")
-    vector_store_path = str(base_path / "resources/vector_store")
+    vector_store_path = str(base_path / "resources/rag_index") # 경로 변경
     report_path = base_path / "output_data/reports"
     report_path.mkdir(parents=True, exist_ok=True)
 
     # 컴포넌트 인스턴스화
     context = Context()
-    retriever = RAGRetriever(knowledge_base_path=knowledge_base_path, vector_store_path=vector_store_path)
     agent = Agent()
     executor = CodeExecutor()
 
@@ -40,12 +48,20 @@ def analyze(
     print(f"User Request: {request}")
     print(f"Data File: {input_file_path}")
 
-    # --- Step 1: RAG로 컨텍스트 강화 ---
-    print("\n--- Step 1: Enhancing Context with RAG ---")
-    retriever.load()
-    rag_context = retriever.retrieve_context(request)
-    context.add_rag_result(rag_context)
-    print(f"RAG Context: {rag_context}")
+    # --- Step 1: RAG로 컨텍스트 강화 (조건부 실행) ---
+    if use_rag:
+        print("\n--- Step 1: Enhancing Context with RAG ---")
+        retriever = RAGRetriever(
+            knowledge_base_path=knowledge_base_path, 
+            vector_store_path=vector_store_path,
+            rebuild=rebuild_vector_store
+        )
+        retriever.load()
+        rag_context = retriever.retrieve_context(request)
+        context.add_rag_result(rag_context)
+        print(f"RAG Context: {rag_context}")
+    else:
+        print("\n--- Step 1: Skipping RAG as per .env configuration ---")
 
     # --- Step 2: 데이터 로딩 및 초기 탐색 ---
     print("\n--- Step 2: Loading and Exploring Data ---")

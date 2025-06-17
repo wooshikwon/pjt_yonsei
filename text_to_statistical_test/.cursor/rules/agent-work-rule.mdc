@@ -1,7 +1,7 @@
 ---
-description: BLUEPRINT.md, factoring_log.md 기반
+description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 # 페르소나 및 역할 부여
 

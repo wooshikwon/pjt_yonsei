@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 from typing import List
 
@@ -23,16 +24,18 @@ class RAGRetriever:
     지식 베이스 문서를 인덱싱하고 관련 정보를 효율적으로 검색하는 역할을 합니다.
     """
 
-    def __init__(self, knowledge_base_path: str, vector_store_path: str):
+    def __init__(self, knowledge_base_path: str, vector_store_path: str, rebuild: bool = False):
         """
         RAGRetriever를 초기화하고 로컬 임베딩 모델을 설정합니다.
 
         Args:
             knowledge_base_path (str): 지식 베이스 문서가 포함된 디렉토리 경로.
             vector_store_path (str): FAISS 인덱스를 저장하거나 로드할 디렉토리 경로.
+            rebuild (bool): True일 경우 기존 인덱스를 강제로 재생성합니다.
         """
         self.knowledge_base_path = Path(knowledge_base_path)
         self.vector_store_path = Path(vector_store_path)
+        self.rebuild = rebuild
         self.index: VectorStoreIndex = None
         
         # 로컬 임베딩 모델 및 청크 분할기 설정 (API 키 필요 없음)
@@ -40,17 +43,29 @@ class RAGRetriever:
         Settings.node_parser = SentenceSplitter(chunk_size=512, chunk_overlap=20)
         Settings.llm = None # LLM 호출 비활성화 (순수 RAG 검색만 수행)
 
-
     def load(self) -> None:
         """
         기존 FAISS 인덱스를 로드하거나, 존재하지 않을 경우 새로 빌드합니다.
+        rebuild 플래그가 True이면 기존 인덱스를 삭제하고 다시 빌드합니다.
         """
+        if self.rebuild and self.vector_store_path.exists():
+            print("INFO: Rebuild flag is set. Deleting existing index.")
+            shutil.rmtree(self.vector_store_path)
+
+        # docstore.json 존재 여부로 기존 인덱스 확인
         if (self.vector_store_path / "docstore.json").exists():
-            print("INFO: Loaded existing index from storage.")
-            storage_context = StorageContext.from_defaults(persist_dir=str(self.vector_store_path))
-            vector_store = FaissVectorStore.from_persist_dir(str(self.vector_store_path))
-            storage_context.vector_store = vector_store
-            self.index = load_index_from_storage(storage_context=storage_context)
+            print("INFO: Loading existing index from storage.")
+            try:
+                vector_store = FaissVectorStore.from_persist_dir(str(self.vector_store_path))
+                storage_context = StorageContext.from_defaults(
+                    vector_store=vector_store, persist_dir=str(self.vector_store_path)
+                )
+                self.index = load_index_from_storage(storage_context=storage_context)
+                print("INFO: Index loaded successfully.")
+            except Exception as e:
+                print(f"ERROR: Failed to load index, which may be corrupted. Rebuilding... Error: {e}")
+                shutil.rmtree(self.vector_store_path)
+                self._build_index()
         else:
             print("INFO: No existing index found. Building a new one...")
             self._build_index()

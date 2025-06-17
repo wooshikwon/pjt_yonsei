@@ -17,3 +17,15 @@
 - 2024-07-25: `resources/knowledge_base`에 `.gitkeep` 파일 추가 및 `RAGRetriever` 안정성 강화(인덱스 로딩 로직 개선, 빈 문서 처리).
 - 2024-07-25: 아키텍처 변경: RAG는 로컬 임베딩 모델(`ko-sroberta-multitask`)만 사용하도록 `RAGRetriever`를 리팩토링하고 `BLUEPRINT.md`에 반영.
 - 2024-07-25: `tests/test_agent.py` 파일 생성. `mocker`를 사용하여 `_call_api`를 모의 처리하고 `generate_analysis_plan` 메서드 테스트.
+- 2024-07-25: `pyproject.toml`에 `python-dotenv` 라이브러리 추가.
+- 2024-07-25: `env.example` 파일 생성. RAG 및 LLM 설정을 위한 환경 변수 템플릿 정의.
+- 2024-07-25: `output_data/rag_storage` 및 `resources/vector_store` 디렉토리 삭제. RAG 인덱스 저장소 구조 정리.
+- 2024-07-25: `src/components/rag_retriever.py` 리팩토링. FAISS 인덱스 로딩/저장 로직 수정 및 `rebuild` 옵션 추가.
+- 2024-07-25: `src/main.py` 수정. `.env` 파일 로드 및 `USE_RAG`, `REBUILD_VECTOR_STORE` 환경 변수를 파이프라인에 적용.
+- 2024-07-25: `BLUEPRINT.md` 업데이트. `.env` 설정, RAG 제어 옵션, `resources/rag_index` 디렉토리 구조 변경 사항 반영.
+- 2024-07-25: **테스트 오류 진단 및 해결**: RAG 테스트 실패 원인이 파일명 불일치임을 발견. `FaissVectorStore`가 `default__vector_store.json`로 저장하는데 테스트에서 `vector_store.json`을 찾고 있었음. 
+- 2024-07-25: `tests/test_rag_retriever.py` 수정. 디버깅용 파일 목록 출력 기능 추가 및 올바른 파일명(`default__vector_store.json`) 사용으로 변경.
+- 2024-07-25: **전체 테스트 통과 확인**: pytest 실행 결과 모든 8개 테스트 성공. RAG 인덱스 생성, 로딩, 재빌드 기능이 정상적으로 동작함을 검증 완료.
+- 2024-07-25: **모듈 경로 문제 해결**: `src/main.py` 실행 시 `ModuleNotFoundError` 해결. `python -m src.main` 방식으로 실행하도록 수정.
+- 2024-07-25: `src/agent.py`에 `_clean_code_response()` 메서드 추가. LLM이 생성하는 코드에서 markdown 백틱 제거하여 `SyntaxError` 방지.
+- 2024-07-25: **🎉 전체 시스템 동작 성공**: RAG 컨텍스트 강화부터 최종 보고서 생성까지 모든 파이프라인이 정상 동작함을 확인. `normal_sales.csv` 데이터로 A팀과 B팀 성과 차이 분석 완료.

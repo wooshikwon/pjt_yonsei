@@ -43,6 +43,36 @@ class Agent:
             print(f"An error occurred while calling OpenAI API: {e}")
             return ""
 
+    def _clean_code_response(self, code_text: str) -> str:
+        """
+        LLM 응답에서 markdown 백틱과 불필요한 텍스트를 제거하여 순수한 Python 코드만 추출합니다.
+        
+        Args:
+            code_text (str): LLM이 생성한 원본 응답 텍스트.
+            
+        Returns:
+            str: 정리된 Python 코드.
+        """
+        if not code_text:
+            return ""
+            
+        # markdown 코드 블록 제거
+        lines = code_text.strip().split('\n')
+        cleaned_lines = []
+        in_code_block = False
+        
+        for line in lines:
+            # 코드 블록 시작/끝 감지
+            if line.strip().startswith('```'):
+                in_code_block = not in_code_block
+                continue
+            
+            # 코드 블록 내부이거나 코드 블록이 없는 경우 모든 라인 포함
+            if in_code_block or '```' not in code_text:
+                cleaned_lines.append(line)
+        
+        return '\n'.join(cleaned_lines).strip()
+
     def generate_analysis_plan(self, context: Context) -> List[str]:
         """
         사용자 요청과 데이터 컨텍스트를 기반으로 통계 분석 계획을 생성합니다.
@@ -83,7 +113,8 @@ class Agent:
         )
         
         messages = [{"role": "system", "content": prompt}]
-        return self._call_api(messages)
+        raw_response = self._call_api(messages)
+        return self._clean_code_response(raw_response)
 
     def self_correct_code(self, context: Context, failed_step: str, failed_code: str, error_message: str) -> str:
         """
@@ -106,7 +137,8 @@ class Agent:
         )
         
         messages = [{"role": "system", "content": prompt}]
-        return self._call_api(messages)
+        raw_response = self._call_api(messages)
+        return self._clean_code_response(raw_response)
 
     def generate_final_report(self, context: Context) -> str:
         """

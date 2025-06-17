@@ -4,7 +4,7 @@ LLM Agent 통계 분석 시스템 구축 계획서
 프로젝트명: text_to_statistical_test
 미션: 사용자가 제공한 테이블 형식의 데이터 파일(csv, parquet, xlsx 등)과 자연어 분석 요청을 입력받아, RAG(검색 증강 생성)를 통해 데이터의 비즈니스 맥락을 파악하고, 통계적으로 유의미한 분석 절차를 자율적으로 계획하고 수행하여 최종 분석 보고서를 생성하는 LLM 에이전트를 구축합니다.
 핵심 가치: 복잡한 통계 지식이나 코딩 능력 없이도 누구나 자연어 질문만으로 데이터 기반의 전문적인 통계 분석 및 의사결정을 내릴 수 있도록 지원합니다.
-중요 사항: RAG를 설정에서 끄거나 켤 수 있게 만들어야 합니다.
+중요 사항: RAG를 .env에서 끄거나 켤 수 있게 만들어야 합니다.
 
 2. 목표 시스템 명세
 입력 (Input):
@@ -45,8 +45,8 @@ Vector Store: FAISS (빠른 속도와 로컬 환경 구동에 최적화)
 📂 디렉토리 구조
 text_to_statistical_test/
 ├── .dockerignore
-├── .env                  # OpenAI API 키 등 민감 정보 관리
-├── env.examle            # .env에 대한 예시 문서
+├── .env                  # OpenAI API 키, RAG 동작 제어 등 민감 정보 및 설정 관리
+├── env.example           # .env 파일의 템플릿
 ├── Dockerfile            # Docker 이미지 빌드 설정
 ├── pyproject.toml        # Poetry 의존성 및 프로젝트 설정
 ├── README.md
@@ -57,9 +57,8 @@ text_to_statistical_test/
 │   └── reports/          # 생성된 분석 보고서 저장
 │       └── report-20250618-1530.md
 ├── resources/
-│   ├── knowledge_base/   # RAG 검색 대상 문서
-│   │   └── business_glossary.md
-│   └── vector_store/     # 생성된 FAISS 인덱스 파일 저장
+│   ├── knowledge_base/   # RAG 검색 대상 문서 (e.g., business_glossary.md)
+│   └── rag_index/        # 생성된 FAISS 벡터 인덱스 파일 저장
 └── src/
     ├── __init__.py
     ├── main.py             # CLI 시작점, Orchestrator 실행
@@ -94,8 +93,8 @@ final_report: "# 최종 분석 보고서\n## 1. 주요 발견 사항\n..."
 3) RAG Retriever (rag_retriever.py)
 역할: 사용자의 요청과 데이터를 비즈니스 맥락과 연결하는 지식 탐색가.
 기능:
-임베딩 관리: knowledge_base 폴더에 새로운 문서가 추가되거나 변경되면, 자동으로 해당 문서를 임베딩하여 vector_store에 FAISS 인덱스로 저장/업데이트.
-정보 검색: 사용자 요청이 들어오면, 요청과 데이터 컬럼명 등을 조합하여 쿼리를 생성. FAISS 인덱스에서 가장 관련성 높은 문서 내용을 검색하여 Context에 추가.
+임베딩 및 인덱스 관리: `.env` 파일의 `REBUILD_VECTOR_STORE=True` 설정 시, 기존 `rag_index`를 삭제하고 `knowledge_base`의 문서를 다시 임베딩하여 FAISS 인덱스를 새로 생성. 평상시(`False`)에는 기존에 생성된 인덱스를 로드하여 사용.
+정보 검색: `.env` 파일의 `USE_RAG=True`일 경우에만 활성화. 사용자 요청이 들어오면, 요청과 데이터 컬럼명 등을 조합하여 쿼리를 생성. `rag_index`의 FAISS 인덱스에서 가장 관련성 높은 문서 내용을 검색하여 Context에 추가.
 예시: request "고객 만족도"와 데이터 컬럼 satisfaction_score를 키워드로 knowledge_base를 검색하여 "고객 만족도는 1-5점 척도"라는 정보를 찾아냄.
 
 4) LLM Agent (agent.py)
@@ -118,18 +117,25 @@ exec() 또는 subprocess를 사용하여 코드 실행 환경을 분리.
 5. 상세 실행 파이프라인 및 시나리오 예시
 시나리오: 마케팅 분석가가 A/B 테스트 결과를 분석하고자 함.
 
-[Step 0] 사용자 실행
-사용자가 터미널에 다음 명령어를 입력합니다.
+[Step 0] 사용자 실행 및 환경 설정
+사용자는 프로젝트 루트에 `.env` 파일을 생성하고 아래와 같이 설정을 구성할 수 있습니다.
+- `USE_RAG=True` / `False` : RAG 사용 여부 제어
+- `REBUILD_VECTOR_STORE=True` / `False` : RAG 인덱스 재생성 여부 제어
+- `OPENAI_API_KEY="sk-..."` : OpenAI API 키 설정
+
+터미널에 다음 명령어를 입력합니다.
 
 Bash
 
 poetry run python src/main.py --file "customer_data.csv" --request "A와 B 제품 간의 고객 만족도에 차이가 있는지 비교 분석해줘"
 [Step 1] 초기화 및 컨텍스트 강화
 
-Orchestrator가 Context 객체를 생성하고 사용자 요청을 저장합니다.
-RAG Retriever를 호출합니다. request의 '고객 만족도'와 customer_data.csv의 컬럼 정보를 바탕으로 knowledge_base를 검색합니다.
+Orchestrator는 `.env` 파일을 읽어 RAG 사용 여부(`USE_RAG`)를 확인합니다.
+`USE_RAG`가 `True`일 경우, RAG Retriever를 초기화하고 `REBUILD_VECTOR_STORE` 값을 확인하여 인덱스를 로드하거나 재생성합니다.
+RAG Retriever는 request의 '고객 만족도'와 customer_data.csv의 컬럼 정보를 바탕으로 `knowledge_base`를 검색합니다.
 결과 (예시): "비즈니스 용어집.md"에서 다음 내용을 찾아 Context에 추가합니다.
 "고객 만족도: satisfaction_score 컬럼을 의미하며, 1점(매우 불만족)부터 5점(매우 만족)까지의 정수형 데이터. 제품 구분은 product_name 컬럼 ('A', 'B')을 따름."
+`USE_RAG`가 `False`일 경우, 이 단계를 건너뜁니다.
 
 [Step 2] 데이터 탐색 (Agent - Task 1)
 

@@ -10,24 +10,24 @@
 
 ### 기본 테스트
 ```bash
-python -m src.main --file marketing_campaign_analysis.csv --request "서로 다른 캠페인 유형들 사이에서 전환율에 유의미한 차이가 있는지 검증해주세요"
+poetry run python -m src.main --file marketing_campaign_analysis.csv --request "서로 다른 캠페인 유형들 사이에서 전환율에 유의미한 차이가 있는지 검증해주세요"
 ```
 
 ### 대안 표현 테스트 (강건성 평가)
 
 #### 변형 1: 다른 용어 사용
 ```bash
-python -m src.main --file marketing_campaign_analysis.csv --request "각 마케팅 전략의 효과성을 비교분석하여 어떤 방법이 가장 우수한 성과를 보이는지 확인해주세요"
+poetry run python -m src.main --file marketing_campaign_analysis.csv --request "각 마케팅 전략의 효과성을 비교분석하여 어떤 방법이 가장 우수한 성과를 보이는지 확인해주세요"
 ```
 
 #### 변형 2: 구체적 그룹 언급
 ```bash
-python -m src.main --file marketing_campaign_analysis.csv --request "이메일 마케팅과 소셜미디어, 그리고 전통적 광고 방식의 전환율을 비교해주세요"
+poetry run python -m src.main --file marketing_campaign_analysis.csv --request "이메일 마케팅과 소셜미디어, 그리고 전통적 광고 방식의 전환율을 비교해주세요"
 ```
 
 #### 변형 3: 통계적 용어 사용
 ```bash
-python -m src.main --file marketing_campaign_analysis.csv --request "campaign_type에 따른 conversion_rate의 평균값 차이가 통계적으로 유의한지 ANOVA로 검정해주세요"
+poetry run python -m src.main --file marketing_campaign_analysis.csv --request "campaign_type에 따른 conversion_rate의 평균값 차이가 통계적으로 유의한지 ANOVA로 검정해주세요"
 ```
 
 ## 예상 결과

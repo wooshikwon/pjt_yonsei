@@ -41,9 +41,9 @@ Your output must be ONLY the numbered list of steps. Do not include any other te
 *User Request: "고객 만족도, 재방문 의사, 그리고 평균 구매 금액 사이에는 어떤 상관관계가 있는지 분석해줘."*
 1. Select the continuous variables for analysis: `satisfaction_score`, `revisit_intention`, `avg_purchase_amount`.
 2. Handle any missing values for these columns, for instance, by using listwise deletion.
-3. Visualize the relationships between all pairs of variables using a pair plot (e.g., `seaborn.pairplot`) to check for linear patterns and outliers.
+3. Check for linear patterns and outliers by examining descriptive statistics and extreme values for each variable.
 4. Calculate the Pearson correlation matrix for the selected variables to quantify the strength and direction of the linear relationships.
-5. Visualize the correlation matrix using a heatmap (e.g., `seaborn.heatmap`) with correlation coefficients annotated for better readability.
+5. Print the correlation matrix with coefficients and their statistical significance (p-values).
 6. Interpret the key correlation coefficients from the matrix, highlighting their strength, direction, and statistical significance.
 
 **Example (Linear Regression)**
@@ -51,10 +51,10 @@ Your output must be ONLY the numbered list of steps. Do not include any other te
 1. Define the independent variables ('ad_spend', 'website_visitors') and the dependent variable ('revenue').
 2. Check for missing values in all relevant columns and handle them appropriately (e.g., imputation or removal).
 3. Check for multicollinearity between independent variables using the Variance Inflation Factor (VIF).
-4. Visualize the relationship between each independent variable and the dependent variable using scatter plots to check for linearity.
+4. Check for linearity by examining correlation coefficients between each independent variable and the dependent variable.
 5. Fit an Ordinary Least Squares (OLS) linear regression model using `statsmodels.api`.
 6. Print the model summary to evaluate the overall model fit (R-squared) and the significance of each variable (p-values).
-7. Perform residual analysis by plotting residuals to check for homoscedasticity and using a Q-Q plot to check for normality of residuals.
+7. Perform residual analysis by calculating residual statistics to check for homoscedasticity and normality assumptions.
 
 **Example (Logistic Regression)**
 *User Request: "고객의 나이와 월간 구매 횟수가 구독 서비스 이탈(churn) 여부를 예측할 수 있는지 분석해줘."*
@@ -98,6 +98,19 @@ You are a senior Python data scientist. Your task is to write a single, executab
 **Context**:
 The data is loaded into a pandas DataFrame named `df`. You have access to libraries like `pandas`, `scipy.stats`, and `statsmodels.api`.
 
+**CRITICAL RESTRICTIONS - FOLLOW THESE STRICTLY**:
+❌ NEVER use any visualization commands:
+   - Do NOT use: plt.show(), fig.show(), plotly.show()
+   - Do NOT use: plt.savefig(), fig.savefig(), any image saving
+   - Do NOT use: plt.plot(), sns.plot(), any plotting functions
+   - Do NOT create: graphs, charts, plots, figures, or visual outputs
+
+✅ INSTEAD, provide numerical summaries:
+   - Use print() statements for statistical results
+   - Use describe(), corr(), value_counts() for data summaries
+   - Report exact numerical values (means, p-values, coefficients)
+   - Create text-based tables using tabulate or formatted strings
+
 Write only the Python code for the "Current Step to Implement". Do not add any explanations, comments, or introductory text. The code should be immediately executable. Your code's output (from `print()` statements) will be used as the input for the next step, so ensure you print any important results like p-values, test statistics, or conclusions.
 """
 
@@ -120,6 +133,17 @@ You are an expert code debugger. The Python code you previously wrote has failed
 **Available Data Context**:
 - Data Schema: {data_schema}
 - The data is in a pandas DataFrame named `df`.
+
+**CRITICAL RESTRICTIONS - FOLLOW THESE STRICTLY**:
+❌ NEVER use any visualization commands:
+   - Do NOT use: plt.show(), fig.show(), plotly.show()
+   - Do NOT use: plt.savefig(), fig.savefig(), any image saving
+   - Do NOT use: plt.plot(), sns.plot(), any plotting functions
+
+✅ PROVIDE numerical summaries only:
+   - Use print() statements for all results
+   - Report exact numbers, statistics, and p-values
+   - Use tabular text output instead of graphs
 
 Analyze the error message and the available data context. Rewrite the code to fix the error while still achieving the original goal.
 Your output must be ONLY the corrected, executable Python code. Do not include any explanations.

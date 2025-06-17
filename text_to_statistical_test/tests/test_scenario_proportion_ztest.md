@@ -10,29 +10,29 @@
 
 ### 기본 테스트
 ```bash
-python -m src.main --file manufacturing_quality_control.csv --request "생산라인A와 생산라인B의 결함품 발생 비율에 통계적으로 의미 있는 차이가 존재하는지 검증해주세요"
+poetry run python -m src.main --file manufacturing_quality_control.csv --request "생산라인A와 생산라인B의 결함품 발생 비율에 통계적으로 의미 있는 차이가 존재하는지 검증해주세요"
 ```
 
 ### 대안 표현 테스트 (강건성 평가)
 
 #### 변형 1: 다른 용어 사용
 ```bash
-python -m src.main --file manufacturing_quality_control.csv --request "두 제조 라인의 불량률을 비교하여 품질 차이가 유의한지 확인해주세요"
+poetry run python -m src.main --file manufacturing_quality_control.csv --request "두 제조 라인의 불량률을 비교하여 품질 차이가 유의한지 확인해주세요"
 ```
 
 #### 변형 2: 비율 강조
 ```bash
-python -m src.main --file manufacturing_quality_control.csv --request "LineA와 LineB에서 defective_units의 비율이 통계적으로 다른지 비율검정을 수행해주세요"
+poetry run python -m src.main --file manufacturing_quality_control.csv --request "LineA와 LineB에서 defective_units의 비율이 통계적으로 다른지 비율검정을 수행해주세요"
 ```
 
 #### 변형 3: 품질관리 관점
 ```bash
-python -m src.main --file manufacturing_quality_control.csv --request "각 production_line별 품질 수준을 비교분석하여 개선이 필요한 라인을 식별해주세요"
+poetry run python -m src.main --file manufacturing_quality_control.csv --request "각 production_line별 품질 수준을 비교분석하여 개선이 필요한 라인을 식별해주세요"
 ```
 
 #### 변형 4: 가설검정 표현
 ```bash
-python -m src.main --file manufacturing_quality_control.csv --request "두 생산라인의 결함률이 동일하다는 귀무가설을 검증하고 싶습니다"
+poetry run python -m src.main --file manufacturing_quality_control.csv --request "두 생산라인의 결함률이 동일하다는 귀무가설을 검증하고 싶습니다"
 ```
 
 ## 예상 결과

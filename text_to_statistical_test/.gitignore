@@ -122,8 +122,12 @@ cython_debug/
 .vscode/
 
 # Custom Ignores
-output_data/
-logs/
+output_data/*
+!output_data/.gitkeep
+
+logs/*
+!logs/.gitkeep
+
 .DS_Store
 *.log
 resources/rag_index/

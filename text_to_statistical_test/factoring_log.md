@@ -59,6 +59,7 @@
 - 2024-07-25: **📖 포괄적 README.md 작성**: 프로젝트 개요, 설치 가이드, 사용 예시, 문제 해결 등 포함.
 - 2024-07-25: **🔨 지식 베이스 빌드 스크립트 분리**: `src/build_knowledge_base.py` 생성. 분석 실행과 RAG 인덱스 관리를 분리하여 시스템 모듈화.
 - 2024-07-25: **📝 모든 문서 업데이트**: `README.md`, `factoring_log.md`, `BLUEPRINT.md`에 빌드 스크립트 분리 내용 반영.
+- 2024-07-25: **🔧 .gitignore 수정**: `output_data/`와 `logs/` 디렉토리 자체는 유지하되, 그 안의 내용만 무시하도록 규칙 수정. (.gitkeep 추가)
 
 # Refactoring Log
 

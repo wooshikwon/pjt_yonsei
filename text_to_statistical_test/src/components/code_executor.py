@@ -1,8 +1,10 @@
 import sys
 from typing import Dict, Any, Tuple
-import warnings
 import io
 import contextlib
+
+# 통합된 경고 설정 사용
+from src.utils.warnings_config import suppress_warnings
 
 class CodeExecutor:
     """
@@ -34,10 +36,8 @@ class CodeExecutor:
         captured_error = io.StringIO()
 
         try:
-            # 모든 경고 메시지 숨기기
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                
+            # 통합된 경고 설정 사용하여 경고 메시지 숨기기
+            with suppress_warnings():
                 # 표준 출력과 표준 오류를 리다이렉션
                 with contextlib.redirect_stdout(captured_output), \
                      contextlib.redirect_stderr(captured_error):

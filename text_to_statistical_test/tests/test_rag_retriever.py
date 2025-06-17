@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from src.components.rag_retriever import RAGRetriever
 
-# NOTE: 이 테스트는 LlamaIndex의 기본 설정을 사용할 경우, 임베딩 및 응답 생성을 위해
-# 실제 OpenAI API를 호출할 수 있습니다. 실행 환경에 API 키가 설정되어 있어야 합니다.
+# NOTE: 이 테스트는 로컬 임베딩 모델(jhgan/ko-sroberta-multitask)을 사용하므로
+# OpenAI API 키가 필요하지 않습니다. 모든 처리는 로컬에서 수행됩니다.
 
 @pytest.fixture
 def temp_dirs(tmp_path):

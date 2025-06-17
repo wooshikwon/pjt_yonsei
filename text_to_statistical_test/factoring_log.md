@@ -37,3 +37,10 @@
 - 2024-07-25: **터미널 출력 완전 정리**: HuggingFace tokenizers, scipy 경고, LlamaIndex 로딩 메시지 등 모든 라이브러리 출력을 숨김 처리.
 - 2024-07-25: `src/main.py`, `src/components/code_executor.py`, `src/components/rag_retriever.py`에 경고 및 출력 억제 코드 추가.
 - 2024-07-25: **🎯 최종 완성**: 터미널은 단계별 진행 상황과 최종 보고서만 깔끔하게 표시. 모든 기술적 메시지는 로그 파일로 분리 완료.
+- 2024-07-25: **🧹 코드 정리 작업**: deprecated된 `query()` 메서드 제거, 불필요한 .DS_Store 파일 삭제, 미사용 환경변수 `LLM_PROVIDER` 제거.
+- 2024-07-25: **⚙️ 경고 설정 통합**: `src/utils/warnings_config.py` 생성으로 중복된 경고 및 로깅 설정을 통합. `main.py`와 `rag_retriever.py`에서 중복 코드 제거.
+- 2024-07-25: **📝 테스트 주석 수정**: `tests/test_rag_retriever.py`의 부정확한 OpenAI API 키 필요 언급을 로컬 임베딩 모델 사용으로 수정.
+- 2024-07-25: **🔧 warnings_config 모듈 완성**: `suppress_warnings()` 컨텍스트 매니저 추가. `CodeExecutor`에서 통합 모듈 사용하도록 리팩토링.
+- 2024-07-25: **✅ 전체 테스트 통과**: 모든 8개 테스트 성공. 통합된 경고 설정으로 시스템 전체의 일관성 확보.
+- 2024-07-25: **📊 복합 테스트 데이터셋 생성**: 5가지 통계 분석 유형(ANOVA, Linear Regression, Logistic Regression, Correlation, 비율검정)을 위한 테스트 데이터 생성.
+- 2024-07-25: **🧪 통합 테스트 시나리오 구축**: `tests/integration_test_scenarios.md` 및 개별 시나리오 파일들로 시스템 강건성 평가 체계 완성.

@@ -3,15 +3,9 @@ import shutil
 from pathlib import Path
 from typing import List
 import logging
-import warnings
-import sys
-import io
-import contextlib
 
-# 라이브러리 로깅 및 경고 메시지 숨기기
-warnings.filterwarnings("ignore")
-logging.getLogger("llama_index").setLevel(logging.ERROR)
-logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+# 통합된 경고 설정 사용
+from src.utils.warnings_config import suppress_stdout
 
 # LlamaIndex 관련 임포트
 from llama_index.core import (
@@ -30,17 +24,6 @@ import faiss
 
 # 파일 로깅용 로거 (상세 정보를 파일에만 기록)
 file_logger = logging.getLogger("file_logger")
-
-@contextlib.contextmanager
-def suppress_stdout():
-    """stdout 출력을 일시적으로 차단하는 컨텍스트 매니저"""
-    with open(os.devnull, "w") as devnull:
-        old_stdout = sys.stdout
-        sys.stdout = devnull
-        try:
-            yield
-        finally:
-            sys.stdout = old_stdout
 
 class RAGRetriever:
     """
@@ -141,16 +124,4 @@ class RAGRetriever:
         # 검색된 노드의 텍스트를 하나의 문자열로 결합
         return "\n".join([node.get_content() for node in retrieved_nodes])
 
-    def query(self, query_text: str, similarity_top_k: int = 3) -> str:
-        """
-        [DEPRECATED] 대신 retrieve_context를 사용하세요.
-        로드된 인덱스를 사용하여 쿼리를 실행하고 가장 관련성 높은 응답을 반환합니다.
-        """
-        # 이 메서드는 이제 retrieve_context로 대체되었습니다.
-        # 하위 호환성을 위해 경고를 출력하고 새 메서드를 호출합니다.
-        warnings.warn(
-            "`query` is deprecated and will be removed in a future version. "
-            "Use `retrieve_context` instead for pure context retrieval.",
-            DeprecationWarning
-        )
-        return self.retrieve_context(query_text, similarity_top_k) 
+ 

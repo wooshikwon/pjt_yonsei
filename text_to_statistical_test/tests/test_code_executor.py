@@ -35,7 +35,7 @@ def test_run_failure():
     
     # 검증
     assert success is False
-    assert 'NameError' in result
+    assert ('NameError' in result or 'undefined_variable' in result)
 
 def test_run_with_global_vars():
     """

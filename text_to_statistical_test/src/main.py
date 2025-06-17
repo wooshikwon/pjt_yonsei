@@ -4,21 +4,14 @@ from pathlib import Path
 from datetime import datetime
 import sys
 import os
-import warnings
 from dotenv import load_dotenv
 
-# 경고 메시지 및 라이브러리 출력 숨기기 설정
-os.environ["TOKENIZERS_PARALLELISM"] = "false"  # HuggingFace tokenizers 경고 숨기기
-os.environ["TRANSFORMERS_VERBOSITY"] = "error"  # HuggingFace transformers 로그 레벨 설정
-warnings.filterwarnings("ignore")  # Python 경고 메시지 숨기기
+# 통합된 경고 및 로깅 설정
+from src.utils.warnings_config import setup_warnings_and_logging
+setup_warnings_and_logging()
 
 # .env 파일 로드
 load_dotenv()
-
-# 추가 라이브러리 경고 숨기기
-import logging
-logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
-logging.getLogger("transformers").setLevel(logging.ERROR)
 
 from src.components.context import Context
 from src.components.rag_retriever import RAGRetriever

@@ -10,29 +10,29 @@
 
 ### 기본 테스트
 ```bash
-python -m src.main --file house_price_prediction.csv --request "부동산 크기와 방의 개수가 주택 시장가치에 어떤 영향을 주는지 예측 모델을 만들어주세요"
+poetry run python -m src.main --file house_price_prediction.csv --request "부동산 크기와 방의 개수가 주택 시장가치에 어떤 영향을 주는지 예측 모델을 만들어주세요"
 ```
 
 ### 대안 표현 테스트 (강건성 평가)
 
 #### 변형 1: 다른 용어 사용
 ```bash
-python -m src.main --file house_price_prediction.csv --request "집의 평수와 침실 수가 부동산 가격을 어떻게 결정하는지 회귀분석으로 알아보세요"
+poetry run python -m src.main --file house_price_prediction.csv --request "집의 평수와 침실 수가 부동산 가격을 어떻게 결정하는지 회귀분석으로 알아보세요"
 ```
 
 #### 변형 2: 예측 모델 강조
 ```bash
-python -m src.main --file house_price_prediction.csv --request "주택의 물리적 특성들을 바탕으로 시장가격을 예측할 수 있는 선형 모델을 구축해주세요"
+poetry run python -m src.main --file house_price_prediction.csv --request "주택의 물리적 특성들을 바탕으로 시장가격을 예측할 수 있는 선형 모델을 구축해주세요"
 ```
 
 #### 변형 3: 구체적 변수 언급
 ```bash
-python -m src.main --file house_price_prediction.csv --request "property_size, bedroom_count, year_built 등의 요인들이 market_value에 미치는 영향을 정량적으로 분석해주세요"
+poetry run python -m src.main --file house_price_prediction.csv --request "property_size, bedroom_count, year_built 등의 요인들이 market_value에 미치는 영향을 정량적으로 분석해주세요"
 ```
 
 #### 변형 4: 인과관계 표현
 ```bash
-python -m src.main --file house_price_prediction.csv --request "건물 규모와 건축연도가 주택 가치에 미치는 선형적 관계를 파악하고 싶습니다"
+poetry run python -m src.main --file house_price_prediction.csv --request "건물 규모와 건축연도가 주택 가치에 미치는 선형적 관계를 파악하고 싶습니다"
 ```
 
 ## 예상 결과

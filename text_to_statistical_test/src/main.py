@@ -35,9 +35,14 @@ def analyze(
     # --- 초기화 ---
     logger.log_system_info("시스템 초기화 중...")
     
+    # .env 파일 다시 로드 (실시간 변경사항 반영)
+    load_dotenv(override=True)
+    
     # 환경변수 읽기
     use_rag = os.getenv("USE_RAG", "True").lower() == "true"
     rebuild_vector_store = os.getenv("REBUILD_VECTOR_STORE", "False").lower() == "true"
+    
+
 
     # 경로 설정
     base_path = Path.cwd()
@@ -56,23 +61,52 @@ def analyze(
     logger.log_detailed(f"User Request: {request}")
     logger.log_detailed(f"Data File: {input_file_path}")
 
+    # --- Step 0: 벡터 스토어 관리 (독립적 실행) ---
+    if rebuild_vector_store:
+        logger.log_step_start(0, "벡터 스토어 재구축")
+        try:
+            # 임시 RAGRetriever 인스턴스로 인덱스 재구축만 수행
+            temp_retriever = RAGRetriever(
+                knowledge_base_path=knowledge_base_path,
+                vector_store_path=vector_store_path,
+                rebuild=True
+            )
+            temp_retriever.load()  # rebuild=True이므로 기존 삭제 후 재구축
+            logger.log_step_success(0, "벡터 스토어 재구축 완료")
+        except Exception as e:
+            logger.log_step_failure(0, f"벡터 스토어 재구축 실패: {str(e)}")
+            logger.log_detailed(f"Vector store rebuild error: {e}", "ERROR")
+
     # --- Step 1: RAG로 컨텍스트 강화 (조건부 실행) ---
     if use_rag:
         logger.log_step_start(1, "RAG 컨텍스트 강화")
-        retriever = RAGRetriever(
-            knowledge_base_path=knowledge_base_path, 
-            vector_store_path=vector_store_path,
-            rebuild=rebuild_vector_store
-        )
-        try:
-            retriever.load()
-            rag_context = retriever.retrieve_context(request)
-            context.add_rag_result(rag_context)
-            logger.log_rag_context(rag_context)
-            logger.log_step_success(1, "지식 베이스에서 관련 정보 검색 완료")
-        except Exception as e:
-            logger.log_step_failure(1, str(e))
-            logger.log_detailed(f"RAG Error: {e}", "ERROR")
+        
+        # 인덱스 존재 여부 먼저 확인
+        vector_store_path_obj = Path(vector_store_path)
+        if not (vector_store_path_obj / "docstore.json").exists():
+            logger.log_step_failure(1, "벡터 인덱스를 찾을 수 없습니다")
+            print("\n⚠️  RAG 인덱스가 존재하지 않습니다!")
+            print("📋 해결 방법: .env 파일에서 REBUILD_VECTOR_STORE=True로 설정하고 다시 실행해주세요.")
+            print(f"📁 지식 베이스 경로: {knowledge_base_path}")
+            print(f"📁 벡터 스토어 경로: {vector_store_path}")
+            print("\n💡 지식 베이스에 .md 파일이 있는지 확인하고, 벡터 스토어를 빌드해주세요.\n")
+            # RAG 없이 계속 진행
+            logger.log_step_success(1, "RAG 인덱스 없음 - RAG 없이 분석 진행")
+        else:
+            retriever = RAGRetriever(
+                knowledge_base_path=knowledge_base_path, 
+                vector_store_path=vector_store_path,
+                rebuild=False  # 재구축은 Step 0에서 이미 처리됨
+            )
+            try:
+                retriever.load()
+                rag_context = retriever.retrieve_context(request)
+                context.add_rag_result(rag_context)
+                logger.log_rag_context(rag_context)
+                logger.log_step_success(1, "지식 베이스에서 관련 정보 검색 완료")
+            except Exception as e:
+                logger.log_step_failure(1, str(e))
+                logger.log_detailed(f"RAG Error: {e}", "ERROR")
     else:
         logger.log_step_start(1, "RAG 건너뛰기")
         logger.log_step_success(1, "환경 설정에 따라 RAG 단계 생략")

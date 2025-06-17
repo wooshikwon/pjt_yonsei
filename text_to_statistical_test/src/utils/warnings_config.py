@@ -10,6 +10,10 @@ import logging
 import sys
 import contextlib
 
+# 시각화 GUI 완전 차단
+import matplotlib
+matplotlib.use('Agg')  # GUI 없는 백엔드로 강제 설정
+
 def setup_warnings_and_logging():
     """
     모든 라이브러리의 경고 메시지와 로깅을 설정합니다.
@@ -18,6 +22,11 @@ def setup_warnings_and_logging():
     # 환경변수 설정 (HuggingFace 관련)
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+    
+    # 시각화 GUI 비활성화
+    os.environ["MPLBACKEND"] = "Agg"
+    if "DISPLAY" in os.environ:
+        del os.environ["DISPLAY"]  # X11 디스플레이 비활성화
     
     # Python 기본 경고 숨기기
     warnings.filterwarnings("ignore")

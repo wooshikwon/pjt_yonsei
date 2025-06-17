@@ -1,92 +1,28 @@
-# =============================================================================
-# Multi-stage Docker build for Text-to-Statistical-Test
-# =============================================================================
-
-# 1. Builder Stage: Install dependencies
-# -----------------------------------------------------------------------------
-FROM python:3.11-slim as builder
-
-# Set up Poetry environment
-ENV POETRY_VERSION=1.8.2
-ENV POETRY_HOME="/opt/poetry"
-ENV POETRY_VENV_IN_PROJECT=true
-ENV POETRY_NO_INTERACTION=1
-ENV PATH="$POETRY_HOME/bin:$PATH"
-
-# Install Poetry
-RUN pip install "poetry==$POETRY_VERSION"
-
-# Set working directory
-WORKDIR /app
-
-# Copy dependency definition files
-COPY pyproject.toml poetry.lock ./
-
-# Install only production dependencies
-# This creates a .venv directory in /app
-RUN poetry install --no-root --no-dev
-
-
-# 2. Final Stage: Create the production image
-# -----------------------------------------------------------------------------
-FROM python:3.11-slim as final
-
-# Set environment variables for Python
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PATH="/app/.venv/bin:$PATH"
-
-# Set working directory
-WORKDIR /app
-
-# Create a non-root user for security
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
-
-# Copy virtual environment from builder stage
-COPY --from=builder /app/.venv ./.venv
-
-# Copy application source code
-COPY --chown=appuser:appgroup . .
-
-# Create necessary directories and set permissions
-# Ensures the app can write reports and logs
-RUN mkdir -p output_data/reports output_data/visualizations logs && \
-    chown -R appuser:appgroup output_data logs
-
-# Switch to the non-root user
-USER appuser
-
-# Entrypoint to run the application
-# Expects a .env file to be mounted or environment variables to be provided at runtime.
-# Example: python main.py --file 'input_data/data_files/sample_data.csv' --request 'Compare sales between Group A and Group B'
-CMD ["python", "main.py"]
-
-# 메타데이터 라벨
-LABEL maintainer="wesley"
-LABEL version="1.0.0"
-LABEL description="RAG 기반 Agentic AI 통계 분석 시스템"
-LABEL security.note="민감한 정보는 런타임 환경변수로 주입하세요"
-
-# Use an official Python runtime as a parent image
+# 1. Base Image: Use an official, slim Python image
 FROM python:3.11-slim
 
-# Set the working directory in the container
-WORKDIR /app
+# 2. Environment Variables: For unbuffered logs and Poetry configuration
+ENV PYTHONUNBUFFERED=1 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false
 
-# Copy the pyproject.toml and poetry.lock files into the container
-# We copy these first to leverage Docker's layer caching.
-COPY pyproject.toml poetry.lock* /app/
-
-# Install poetry
+# 3. Install Poetry
 RUN pip install poetry
 
-# Install project dependencies
-# --no-root: Don't install the project itself, only its dependencies
-# This is useful for creating a runtime environment for the sandbox
-RUN poetry install --no-root
+# 4. Work Directory: Set the working directory inside the container
+WORKDIR /app
 
-# The sandbox doesn't need the project source code, only the installed libraries.
-# The code to be executed will be mounted dynamically into the container.
+# 5. Layer Caching: Copy only dependency files first to leverage Docker cache
+COPY pyproject.toml poetry.lock ./
 
-# This command is not strictly necessary for the sandbox, but can be useful for debugging.
-CMD ["python", "--version"] 
+# 6. Install Dependencies: Install only production dependencies
+RUN poetry install --no-dev --no-root
+
+# 7. Copy Application Code: Copy the source code and necessary resources
+COPY src ./src
+COPY input_data ./input_data
+COPY resources ./resources
+
+# 8. Command: Set the default command to run the application
+# The user will provide --file and --request arguments when running the container.
+CMD ["poetry", "run", "python", "src/main.py"] 

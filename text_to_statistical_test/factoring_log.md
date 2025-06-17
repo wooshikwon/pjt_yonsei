@@ -17,3 +17,30 @@
 - 2024-07-25: `resources/knowledge_base`에 `.gitkeep` 파일 추가 및 `RAGRetriever` 안정성 강화(인덱스 로딩 로직 개선, 빈 문서 처리).
 - 2024-07-25: 아키텍처 변경: RAG는 로컬 임베딩 모델(`ko-sroberta-multitask`)만 사용하도록 `RAGRetriever`를 리팩토링하고 `BLUEPRINT.md`에 반영.
 - 2024-07-25: `tests/test_agent.py` 파일 생성. `mocker`를 사용하여 `_call_api`를 모의 처리하고 `generate_analysis_plan` 메서드 테스트.
+- 2024-07-25: `pyproject.toml`에 `python-dotenv` 라이브러리 추가.
+- 2024-07-25: `env.example` 파일 생성. RAG 및 LLM 설정을 위한 환경 변수 템플릿 정의.
+- 2024-07-25: `output_data/rag_storage` 및 `resources/vector_store` 디렉토리 삭제. RAG 인덱스 저장소 구조 정리.
+- 2024-07-25: `src/components/rag_retriever.py` 리팩토링. FAISS 인덱스 로딩/저장 로직 수정 및 `rebuild` 옵션 추가.
+- 2024-07-25: `src/main.py` 수정. `.env` 파일 로드 및 `USE_RAG`, `REBUILD_VECTOR_STORE` 환경 변수를 파이프라인에 적용.
+- 2024-07-25: `BLUEPRINT.md` 업데이트. `.env` 설정, RAG 제어 옵션, `resources/rag_index` 디렉토리 구조 변경 사항 반영.
+- 2024-07-25: **테스트 오류 진단 및 해결**: RAG 테스트 실패 원인이 파일명 불일치임을 발견. `FaissVectorStore`가 `default__vector_store.json`로 저장하는데 테스트에서 `vector_store.json`을 찾고 있었음. 
+- 2024-07-25: `tests/test_rag_retriever.py` 수정. 디버깅용 파일 목록 출력 기능 추가 및 올바른 파일명(`default__vector_store.json`) 사용으로 변경.
+- 2024-07-25: **전체 테스트 통과 확인**: pytest 실행 결과 모든 8개 테스트 성공. RAG 인덱스 생성, 로딩, 재빌드 기능이 정상적으로 동작함을 검증 완료.
+- 2024-07-25: **모듈 경로 문제 해결**: `src/main.py` 실행 시 `ModuleNotFoundError` 해결. `python -m src.main` 방식으로 실행하도록 수정.
+- 2024-07-25: `src/agent.py`에 `_clean_code_response()` 메서드 추가. LLM이 생성하는 코드에서 markdown 백틱 제거하여 `SyntaxError` 방지.
+- 2024-07-25: **🎉 전체 시스템 동작 성공**: RAG 컨텍스트 강화부터 최종 보고서 생성까지 모든 파이프라인이 정상 동작함을 확인. `normal_sales.csv` 데이터로 A팀과 B팀 성과 차이 분석 완료.
+- 2024-07-25: **로깅 시스템 구축**: `src/utils/logger.py` 생성으로 날짜별 상세 로그 파일 저장 및 터미널 출력 간소화 시스템 구현.
+- 2024-07-25: `src/main.py` 로깅 시스템 적용. 단계별 진행 상황만 터미널에 표시하고 상세 정보는 `logs/` 디렉토리에 저장.
+- 2024-07-25: `src/components/rag_retriever.py` 로깅 개선. print 출력을 파일 로깅으로 대체하여 터미널 출력 정리.
+- 2024-07-25: **예제 데이터 생성**: `team_sales_performance.csv`, `customer_survey.csv` 통계 검정용 샘플 데이터 생성.
+- 2024-07-25: **✅ 로깅 시스템 동작 확인**: 터미널은 단계별 진행상황만 표시, 상세 로그는 `logs/analysis_YYYYMMDD.log`에 자동 저장. 깔끔한 최종 보고서 출력 완료.
+- 2024-07-25: **터미널 출력 완전 정리**: HuggingFace tokenizers, scipy 경고, LlamaIndex 로딩 메시지 등 모든 라이브러리 출력을 숨김 처리.
+- 2024-07-25: `src/main.py`, `src/components/code_executor.py`, `src/components/rag_retriever.py`에 경고 및 출력 억제 코드 추가.
+- 2024-07-25: **🎯 최종 완성**: 터미널은 단계별 진행 상황과 최종 보고서만 깔끔하게 표시. 모든 기술적 메시지는 로그 파일로 분리 완료.
+- 2024-07-25: **🧹 코드 정리 작업**: deprecated된 `query()` 메서드 제거, 불필요한 .DS_Store 파일 삭제, 미사용 환경변수 `LLM_PROVIDER` 제거.
+- 2024-07-25: **⚙️ 경고 설정 통합**: `src/utils/warnings_config.py` 생성으로 중복된 경고 및 로깅 설정을 통합. `main.py`와 `rag_retriever.py`에서 중복 코드 제거.
+- 2024-07-25: **📝 테스트 주석 수정**: `tests/test_rag_retriever.py`의 부정확한 OpenAI API 키 필요 언급을 로컬 임베딩 모델 사용으로 수정.
+- 2024-07-25: **🔧 warnings_config 모듈 완성**: `suppress_warnings()` 컨텍스트 매니저 추가. `CodeExecutor`에서 통합 모듈 사용하도록 리팩토링.
+- 2024-07-25: **✅ 전체 테스트 통과**: 모든 8개 테스트 성공. 통합된 경고 설정으로 시스템 전체의 일관성 확보.
+- 2024-07-25: **📊 복합 테스트 데이터셋 생성**: 5가지 통계 분석 유형(ANOVA, Linear Regression, Logistic Regression, Correlation, 비율검정)을 위한 테스트 데이터 생성.
+- 2024-07-25: **🧪 통합 테스트 시나리오 구축**: `tests/integration_test_scenarios.md` 및 개별 시나리오 파일들로 시스템 강건성 평가 체계 완성.

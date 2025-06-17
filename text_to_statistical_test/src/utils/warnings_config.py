@@ -1,0 +1,46 @@
+"""
+통합된 경고 및 로깅 설정 모듈
+
+모든 라이브러리의 경고 메시지와 로깅을 일관성 있게 관리합니다.
+"""
+
+import os
+import warnings
+import logging
+import sys
+import contextlib
+
+def setup_warnings_and_logging():
+    """
+    모든 라이브러리의 경고 메시지와 로깅을 설정합니다.
+    시스템 전체에서 일관된 경고 처리를 보장합니다.
+    """
+    # 환경변수 설정 (HuggingFace 관련)
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+    
+    # Python 기본 경고 숨기기
+    warnings.filterwarnings("ignore")
+    
+    # 라이브러리별 로깅 레벨 설정
+    logging.getLogger("llama_index").setLevel(logging.ERROR)
+    logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+    logging.getLogger("transformers").setLevel(logging.ERROR)
+
+@contextlib.contextmanager
+def suppress_stdout():
+    """stdout 출력을 일시적으로 차단하는 컨텍스트 매니저"""
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+
+@contextlib.contextmanager
+def suppress_warnings():
+    """경고 메시지를 일시적으로 차단하는 컨텍스트 매니저"""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        yield 

@@ -1,148 +1,29 @@
 # Git
-.git
+.git/
 .gitignore
-.gitattributes
 
-# Python
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
-env
-pip-log.txt
-pip-delete-this-directory.txt
-.tox
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git
-.mypy_cache
-.pytest_cache
-.hypothesis
-
-# Virtual environments
-venv/
-.venv/
-ENV/
-env/
-.env
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Project specific
-output_data/
-logs/
-*.log
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Documentation
-docs/
-*.md
-!README.md
-
-# Development files
-tests/
-.pytest_cache/
-htmlcov/
-.coverage
-
-# Poetry
-poetry.lock
-.poetry/
-
-# Node modules (if any)
-node_modules/
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Large files
-*.csv
-*.xlsx
-*.json
-input_data/data_files/*
-!input_data/data_files/.gitkeep
-
-# Python 캐시
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-
-# 가상환경
-.venv/
-venv/
-env/
-
-# IDE 설정
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# 로그 파일
-logs/
-*.log
-
-# 환경 설정 (보안상 제외)
-.env
-*.env
-
-# 임시 파일
-*.tmp
-*.temp
-
-# 입력 데이터 (용량 고려)
-input_data/*.hyper
-input_data/*.csv
-input_data/*.xlsx
-
-# 결과 파일
-output_results/*.md
-output_results/*.html
-output_results/*.json
-output_results/*.png
-output_results/*.jpg
-
-# RAG 인덱스 (재구축 필요)
-resources/rag_index/*
-
-# Docker 관련
-Dockerfile
-docker-compose.yml
+# Docker
 .dockerignore
+Dockerfile
 
-# 개발 도구
-.coverage
-htmlcov/
+# Python virtual environment
+.venv/
+**/__pycache__/
+*.pyc
 
-# Jupyter 노트북
-.ipynb_checkpoints/
-notebooks/
+# IDE / Editor specific
+.vscode/
+.idea/
 
-# 문서
+# OS-specific
+.DS_Store
+
+# Sensitive files
+.env
+
+# Output and logs
+output_data/
+resources/vector_store/
+factoring_log.md
+BLUEPRINT.md
 README.md 

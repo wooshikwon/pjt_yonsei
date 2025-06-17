@@ -1,37 +1,40 @@
 # Git
-.git/
+.git
 .gitignore
 
 # Docker
 .dockerignore
-Dockerfile
+Dockerfile*
 
-# Python virtual environment
-.venv/
-**/__pycache__/
+# Python
+.venv
+__pycache__
 *.pyc
 
-# IDE / Editor specific
-.vscode/
-.idea/
+# IDE
+.vscode
+.idea
 
-# OS-specific
+# OS
 .DS_Store
 
-# Sensitive files (handled via volume mount)
+# Sensitive files
 .env
+*.env.*
+!.env.example
 
-# Output and logs (created at runtime)
-output_data/
+# Logs and outputs
 logs/
+output_data/
 
-# Development files
+# Test results
+tests/validation_result.json
+
+# Docs (not needed in image)
 factoring_log.md
 BLUEPRINT.md
 README.md
+tests/*.md
 
 # Deprecated paths
-resources/vector_store/
-
-# Tests
-tests/ 
+resources/vector_store/ 

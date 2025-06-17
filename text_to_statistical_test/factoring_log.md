@@ -51,6 +51,14 @@
 - 2024-07-25: **✅ 독립 환경변수 테스트 완료**: `USE_RAG=False, REBUILD_VECTOR_STORE=True` 시나리오 성공. 벡터 스토어 재구축과 RAG 사용이 완전히 분리 작동 확인.
 - 2024-07-25: **🐳 Docker 환경 완전 개선**: Dockerfile, docker-compose.yml, .dockerignore 전면 리팩토링. 보안 강화된 환경변수 처리 및 개발/프로덕션 분리.
 - 2024-07-25: **🔒 보안 강화**: .env 파일 volume mount 방식으로 API 키 유출 방지. 이미지에 민감정보 포함되지 않는 안전한 구조 구축.
+- 2024-07-25: **🚀 자동화된 검증 스크립트 구축**: `tests/validation.py` 생성. `qa.json`의 모든 테스트 케이스를 자동으로 실행하고, 실제 결과와 기대 결과를 비교할 수 있는 `validation_result.json` 생성.
+- 2024-07-25: **🛡️ 검증 스크립트 강건성 강화**: `validation.py` 리팩토링. 테스트 실패 시에도 중단되지 않고, 유연한 결과 추출 및 가독성 높은 출력으로 개선.
+- 2024-07-25: **🚀 Poetry 환경 호환성 확보**: `validation.py`가 `poetry run` 가상환경에서 실행되도록 수정. `ModuleNotFoundError` 및 `pyenv` 버전 충돌 문제 해결.
+- 2024-07-25: **📝 표준 .gitignore 생성**: 일반적인 Python 프로젝트의 .gitignore 파일을 생성하고, output_data/를 포함하여 불필요한 파일들을 무시하도록 설정.
+- 2024-07-25: **🧹 .dockerignore 정리**: .gitignore와 중복되는 내용을 정리하여 Docker 이미지 빌드에 필요한 최소한의 파일만 포함하도록 수정.
+- 2024-07-25: **📖 포괄적 README.md 작성**: 프로젝트 개요, 설치 가이드, 사용 예시, 문제 해결 등 포함.
+- 2024-07-25: **🔨 지식 베이스 빌드 스크립트 분리**: `src/build_knowledge_base.py` 생성. 분석 실행과 RAG 인덱스 관리를 분리하여 시스템 모듈화.
+- 2024-07-25: **📝 모든 문서 업데이트**: `README.md`, `factoring_log.md`, `BLUEPRINT.md`에 빌드 스크립트 분리 내용 반영.
 
 # Refactoring Log
 

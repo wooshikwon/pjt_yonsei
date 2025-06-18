@@ -87,7 +87,7 @@ REBUILD_VECTOR_STORE=False
 #### Poetry 환경에서:
 
 ```bash
-python -m src.main --file "team_sales_performance.csv" --request "팀별 영업 성과에 차이가 있는지 분석해줘"
+Poetry run python -m src.main --file "team_sales_performance.csv" --request "팀별 영업 성과에 차이가 있는지 분석해줘"
 ```
 
 #### Docker 환경에서:
@@ -127,23 +127,23 @@ text_to_statistical_test/
 ### 기본 명령어 구조
 
 ```bash
-python -m src.main --file "<데이터파일명>" --request "<자연어 요청>"
+Poetry run python -m src.main --file "<데이터파일명>" --request "<자연어 요청>"
 ```
 
 ### 실제 사용 예시
 
 ```bash
 # 1. t-검정 예시
-python -m src.main --file "team_sales_performance.csv" --request "A팀과 B팀의 매출에 유의미한 차이가 있나요?"
+Poetry run python -m src.main --file "team_sales_performance.csv" --request "A팀과 B팀의 매출에 유의미한 차이가 있나요?"
 
 # 2. ANOVA 예시  
-python -m src.main --file "marketing_campaign_analysis.csv" --request "마케팅 캠페인 유형별로 전환율에 차이가 있는지 분석해주세요"
+Poetry run python -m src.main --file "marketing_campaign_analysis.csv" --request "마케팅 캠페인 유형별로 전환율에 차이가 있는지 분석해주세요"
 
 # 3. 회귀분석 예시
-python -m src.main --file "house_price_prediction.csv" --request "집 크기와 가격 사이의 관계를 분석하고 예측 모델을 만들어주세요"
+Poetry run python -m src.main --file "house_price_prediction.csv" --request "집 크기와 가격 사이의 관계를 분석하고 예측 모델을 만들어주세요"
 
 # 4. 상관분석 예시
-python -m src.main --file "employee_performance_correlation.csv" --request "직원 만족도와 성과 간의 상관관계를 분석해주세요"
+Poetry run python -m src.main --file "employee_performance_correlation.csv" --request "직원 만족도와 성과 간의 상관관계를 분석해주세요"
 ```
 
 ### 🔧 고급 설정

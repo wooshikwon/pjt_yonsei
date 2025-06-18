@@ -53,3 +53,23 @@ def suppress_warnings():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         yield 
+
+def suppress_warnings_and_logs():
+    """
+    모든 경고와 특정 라이브러리의 로그를 무시하고, 
+    matplotlib 백엔드를 'Agg'로 설정하여 GUI 창이 뜨지 않도록 합니다.
+    """
+    # 모든 경고를 무시하도록 설정
+    warnings.filterwarnings("ignore", category=UserWarning)
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    
+    # LlamaIndex 로깅 레벨 설정
+    logging.getLogger("llama_index.readers.file.base").setLevel(logging.CRITICAL)
+
+@contextlib.contextmanager
+def suppress_all_warnings():
+    """모든 경고를 무시하는 컨텍스트 매니저"""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        yield 

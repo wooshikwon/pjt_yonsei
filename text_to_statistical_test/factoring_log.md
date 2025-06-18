@@ -60,6 +60,15 @@
 - 2024-07-25: **🔨 지식 베이스 빌드 스크립트 분리**: `src/build_knowledge_base.py` 생성. 분석 실행과 RAG 인덱스 관리를 분리하여 시스템 모듈화.
 - 2024-07-25: **📝 모든 문서 업데이트**: `README.md`, `factoring_log.md`, `BLUEPRINT.md`에 빌드 스크립트 분리 내용 반영.
 - 2024-07-25: **🔧 .gitignore 수정**: `output_data/`와 `logs/` 디렉토리 자체는 유지하되, 그 안의 내용만 무시하도록 규칙 수정. (.gitkeep 추가)
+- 2024-07-26: **🚀 QA 검증 자동화 스크립트 생성**: `run_qa.py`를 생성하여 `qa.json`의 모든 테스트 케이스를 자동으로 실행하고, 실제 결과와 기대 결과를 비교할 수 있는 `qa_result.json`을 생성하는 기능을 구현함.
+- 2024-07-26: **📦 RAG 인덱스 디렉토리 생성**: `BLUEPRINT.md` 설계에 따라 RAG 벡터 인덱스를 저장할 `resources/rag_index` 디렉토리를 생성하고, Git 추적을 위한 `.gitkeep` 파일을 추가함.
+- 2024-07-26: **📚 RAG 지식 베이스 구축**: `input_data/data_files/`에 있는 7개의 표준 데이터셋(boston_housing, Iris, mpg, pima-indians-diabetes, teachingratings, tips, titanic)에 대한 설명 및 컬럼 정의를 담은 마크다운 문서를 `resources/knowledge_base/`에 생성함.
+- 2024-07-26: **🧠 QA 시나리오 고도화**: `tests/qa.json`의 모든 질문에서 명시적인 통계 용어(ANOVA, T-검정, 유의수준 등)를 제거하고, 사용자의 의도를 파악해야 하는 자연어 질문으로 재구성하여 시스템의 LLM 추론 능력 테스트 케이스를 강화함.
+- 2024-07-26: **🔧 의존성 오류 해결**: `warnings_config` 모듈에서 사용되는 `matplotlib` 라이브러리가 `pyproject.toml`에 누락되어 발생한 `ModuleNotFoundError`를 해결하기 위해 `poetry add matplotlib` 명령어로 의존성을 추가함.
+- 2024-07-26: **🚫 시각화 차단 로직 개선**: '시각화를 막기 위해 시각화 라이브러리를 설치'하는 역설적인 구조를 개선. `warnings_config.py`에서 `matplotlib` 관련 코드를 삭제하고, `poetry remove`를 통해 의존성을 완전 제거하여 보다 근본적인 방식으로 시각화 실행을 차단함.
+- 2024-07-26: **🚀 QA 검증 자동화 스크립트 재생성**: 사용자의 요청에 따라 `run_qa.py` 파일을 재생성함. 이 스크립트는 `tests/qa.json`의 모든 테스트 케이스를 자동으로 실행하고, 그 결과를 `qa_result.json`으로 저장하는 기능을 수행함.
+- 2024-07-26: **🛡️ 시각화 차단 정책 재변경**: 논의 끝에, 라이브러리 부재로 인한 `ModuleNotFoundError`보다 `matplotlib.use('Agg')`로 명시적 백엔드를 설정하는 것이 더 안정적이고 의도가 명확하다고 판단함. `warnings_config.py` 코드를 원복하고 `matplotlib` 의존성을 다시 추가하는 방향으로 정책을 재수정함.
+- 2024-07-26: **🚚 QA 스크립트 경로 수정**: `run_qa.py`를 `tests/` 디렉토리로 이동하고, 결과 파일(`qa_result.json`)도 동일한 `tests/` 디렉토리에 저장되도록 스크립트 내부 경로 로직을 수정함.
 
 # Refactoring Log
 

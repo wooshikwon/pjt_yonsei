@@ -1,559 +1,144 @@
 {
-  "personality_dataset.csv": [
+  "questions": [
     {
-      "command": "python -m src.main --file \"personality_dataset.csv\" --request \"응답자들의 하루 ‘혼자 보내는 시간’(Time_spent_Alone) 평균은 5시간(μ=5)과 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정 (One-Sample T-Test)",
-      "answer": "* H₀: μ = 5\n* H₁: μ ≠ 5\nt(2476) = –8.30, p = 1.23×10⁻¹¹ < 0.05 → 귀무가설 기각_x000B_→ 평균 혼자 시간은 5시간과 통계적으로 유의미하게 다릅니다."
+      "number": 1,
+      "dataset": "teachingratings.csv",
+      "question": "교수의 성별이 학생들의 평가 점수에 영향을 미치는지 궁금합니다.",
+      "answer": "p-value가 0.001로 유의수준 0.05보다 작기 때문에 귀무가설을 기각합니다. 이는 성별에 따라 평균 평가 점수에 차이가 있다는 증거가 됩니다. 'female' 변수의 계수는 -0.1680으로, 여성 교수가 남성 교수보다 0.168점 낮은 점수를 받는다는 것을 의미합니다.",
+      "test": "회귀 분석 (Regression Analysis)"
     },
     {
-      "command": "python -m src.main --file \"personality_dataset.csv\" --request \"‘사회적 활동 후 소진감’(Drained_after_socializing = Yes) 그룹과 ‘아님’ 그룹(No)의 하루 게시 빈도(Post_frequency) 평균에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정 (Independent Samples T-Test)",
-      "answer": "* H₀: μ_Yes = μ_No\n* H₁: μ_Yes ≠ μ_No\nt(2475) = –6.31, p < 0.001 → 귀무가설 기각_x000B_→ 소진감 유무에 따라 게시 빈도 평균이 유의미하게 다릅니다."
+      "number": 2,
+      "dataset": "teachingratings.csv",
+      "question": "교수의 나이대에 따라 외모 점수에 차이가 있는지 확인하고 싶습니다.",
+      "answer": "F-통계량에 대한 p-value(PR(>F))가 4.32e-08로 유의수준 0.05보다 작으므로 귀무가설을 기각합니다. 이는 적어도 한 연령 집단의 평균 외모 점수에 유의미한 차이가 있다는 것을 의미합니다.",
+      "test": "분산 분석 (ANOVA)"
     },
     {
-      "command": "python -m src.main --file \"personality_dataset.csv\" --request \"같은 응답자의 ‘사회적 행사 참석 횟수’(Social_event_attendance)와 ‘외출 횟수’(Going_outside) 평균에 차이가 있습니까?\"",
-      "tag": "대응표본 T-검정 (Paired Samples T-Test)",
-      "answer": "* H₀: μ_attendance = μ_going_out\n* H₁: 차이가 있다_x000B_t(2476) = –33.20, p ≈ 1.67×10⁻¹¹⁵ < 0.05 → 귀무가설 기각_x000B_→ 참석 횟수와 외출 횟수 평균이 통계적으로 유의미하게 다릅니다."
+      "number": 3,
+      "dataset": "teachingratings.csv",
+      "question": "교수의 외모 점수와 학생들의 평가 점수 사이에 연관성이 있나요?",
+      "answer": "p-value가 0.05보다 작으므로(4.25e-05), 외모 점수와 평가 점수 사이에는 유의미한 상관관계가 있다는 증거가 됩니다.",
+      "test": "단순 선형 회귀분석 (Simple Linear Regression)"
     },
     {
-      "command": "python -m src.main --file \"personality_dataset.csv\" --request \"‘무대 공포증’(Stage_fear: Yes/No)과 ‘사회 후 소진감’(Drained_after_socializing: Yes/No) 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정 (Chi-Squared Test)",
-      "answer": "* H₀: 두 변수는 독립\n* H₁: 독립이 아니다\nχ²(1) = 865.05, p < 0.001 → 귀무가설 기각_x000B_→ 무대 공포증과 사회 후 소진감은 통계적으로 연관되어 있습니다."
+      "number": 4,
+      "dataset": "teachingratings.csv",
+      "question": "교수가 정규직인지 여부가 외모 점수에 영향을 주는지 알고 싶습니다.",
+      "answer": "p-value가 0.05보다 크므로 귀무가설을 기각하지 못합니다. 정규직 교수와 비정규직 교수의 평균 외모 점수 간에 유의미한 차이가 있다는 증거는 없습니다.",
+      "test": "독립표본 T-검정 (Independent Samples T-test)"
     },
     {
-      "command": "python -m src.main --file \"personality_dataset.csv\" --request \"성격 유형(Personality: Introvert/Extrovert)에 따라 ‘사회적 행사 참석 횟수’(Social_event_attendance) 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "* H₀: μ_introvert = μ_extrovert\n* H₁: 차이가 있다\nF(1,2475) = 272.16, p < 0.001 → 귀무가설 기각_x000B_→ 성격 유형별 참석 횟수 평균이 통계적으로 유의미하게 다릅니다."
+      "number": 5,
+      "dataset": "teachingratings.csv",
+      "question": "영어를 모국어로 사용하는 교수와 그렇지 않은 교수 사이에 배정되는 총 학생 수에 차이가 있는지 확인해 주세요.",
+      "answer": "p-value는 0.063입니다. 유의수준 α = 0.05에서는 p-value가 더 크므로 귀무가설을 기각하지 못합니다. 하지만 유의수준 α = 0.1에서는 p-value가 더 작으므로 귀무가설을 기각하며, 영어가 모국어인지 여부에 따라 배정된 학생 수에 유의미한 차이가 있다고 결론 내릴 수 있습니다.",
+      "test": "회귀 분석 (Regression Analysis)"
     },
     {
-      "command": "python -m src.main --file \"personality_dataset.csv\" --request \"친구 수(Friends_circle_size)와 하루 게시 빈도(Post_frequency) 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관계수 유의성 검정",
-      "answer": "* H₀: ρ = 0\n* H₁: ρ ≠ 0\nr = –0.12, p < 0.001 → 귀무가설 기각_x000B_→ 친구 수와 게시 빈도 사이에 통계적으로 유의미한(약한 음의) 상관관계가 있습니다."
+      "number": 6,
+      "dataset": "teachingratings.csv",
+      "question": "수업 평가에 참여한 학생 수가 많을수록 교수에 대한 평가 점수도 달라지나요?",
+      "answer": "R-제곱 값은 0.001이며, 이는 상관계수(R)가 약 0.03임을 의미합니다. 따라서 평가에 참여한 학생 수와 교수 평가 점수 사이에는 매우 약한 상관관계가 존재합니다.",
+      "test": "상관 분석 (Correlation Analysis)"
     },
     {
-      "command": "python -m src.main --file \"personality_dataset.csv\" --request \"전체 응답자 중 ‘내향형’(Personality = Introvert) 비율이 50%입니까?\"",
-      "tag": "단일 비율 검정 (One-Proportion Z-Test)",
-      "answer": "* H₀: p = 0.5\n* H₁: p ≠ 0.5\np̂ = 0.45, z = –1.03, p = 0.154 > 0.05 → 귀무가설 채택_x000B_→ 내향형 비율은 50%와 통계적으로 차이가 없습니다."
+      "number": 7,
+      "dataset": "teachingratings.csv",
+      "question": "교수의 성별에 따라 학생들이 매기는 평가 점수에 차이가 있는지 확인해 주세요.",
+      "answer": "p-value가 0.00124로 유의수준 0.05보다 작으므로 귀무가설을 기각합니다. 이는 성별에 따른 교수 평가 점수에 통계적으로 유의미한 차이가 있음을 나타냅니다.",
+      "test": "독립표본 T-검정 (Independent Samples T-test)"
     },
     {
-      "command": "python -m src.main --file \"personality_dataset.csv\" --request \"‘내향형’ 그룹과 ‘외향형’ 그룹의 친구 수(Friends_circle_size) 분산이 동일합니까?\"",
-      "tag": "등분산성 검정 (Levene's Test)",
-      "answer": "* H₀: 분산이 같다\n* H₁: 분산이 다르다\nW = 167.08, p < 0.001 → 귀무가설 기각_x000B_→ 두 그룹 간 친구 수 분산이 통계적으로 유의미하게 다릅니다."
+      "number": 8,
+      "dataset": "teachingratings.csv",
+      "question": "교수의 연령대별로 외모 점수에 차이가 있는지 알려주세요.",
+      "answer": "p-value가 4.32e-08로 유의수준 0.05보다 매우 작으므로 귀무가설을 기각합니다. 이는 적어도 하나의 연령 집단에서 평균 외모 점수에 유의미한 차이가 있음을 시사합니다.",
+      "test": "분산 분석 (ANOVA)"
     },
     {
-      "command": "python -m src.main --file \"personality_dataset.csv\" --request \"하루 게시 빈도(Post_frequency) 분포는 정규분포를 따릅니까?\"",
-      "tag": "정규성 검정 (Shapiro-Wilk Test)",
-      "answer": "* H₀: 정규분포를 따른다\n* H₁: 따르지 않는다\nW = 0.840, p ≈ 2.82×10⁻¹⁸ < 0.05 → 귀무가설 기각_x000B_→ 게시 빈도 분포는 정규성을 만족하지 않습니다."
+      "number": 9,
+      "dataset": "teachingratings.csv",
+      "question": "교수의 나이가 평가 점수에 영향을 미치는지, 연령대별로 차이가 있는지 확인해 주세요.",
+      "answer": "p-value가 0.295로 유의수준 0.05보다 크므로 귀무가설을 기각하지 못합니다. 연령대별 교수 평가 점수에는 통계적으로 유의미한 차이가 없습니다.",
+      "test": "분산 분석 (ANOVA)"
     },
     {
-      "command": "python -m src.main --file \"personality_dataset.csv\" --request \"단순선형회귀모델에서 ‘하루 게시 빈도’(Post_frequency)가 ‘친구 수’(Friends_circle_size)를 예측하는 데 유의미한 설명변수입니까?\"",
-      "tag": "회귀계수 유의성 검정",
-      "answer": "* ₀: β₁ = 0\n* H₁: β₁ ≠ 0\nβ₁의 p = 0.000 < 0.05 → 귀무가설 기각_x000B_→ 게시 빈도는 친구 수 예측에 통계적으로 유의미한 설명변수입니다."
-    }
-  ],
-  "Students Social Media Addiction.csv": [
-    {
-      "command": "python -m src.main --file \"Students Social Media Addiction.csv\" --request \"학생들의 평균 일일 소셜 미디어 사용 시간(Avg_Daily_Usage_Hours)이 3시간(μ₀=3)과 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정 (One-Sample T-Test)",
-      "answer": "* H₀: μ = 3\n* H₁: μ ≠ 3\n* 검정통계량 t = 40.52, p = 3.72×10⁻¹⁸⁶ < 0.05 → 귀무가설 기각\n* 결론: 평균 사용 시간은 3시간과 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"Students Social Media Addiction.csv\" --request \"남학생(Gender = Male)과 여학생(Female)의 중독 점수(Addicted_Score) 평균에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정 (Independent Samples T-Test)",
-      "answer": "* H₀: μ_Male = μ_Female\n* H₁: μ_Male ≠ μ_Female\n* t = –1.32, p = 0.188 > 0.05 → 귀무가설 채택\n* 결론: 성별에 따른 중독 점수 평균 차이는 통계적으로 유의미하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"Students Social Media Addiction.csv\" --request \"같은 학생의 ‘수면 시간’(Sleep_Hours_Per_Night)과 ‘소셜 미디어 사용 시간’(Avg_Daily_Usage_Hours) 평균에 차이가 있습니까?\"",
-      "tag": "대응표본 T-검정 (Paired Samples T-Test)",
-      "answer": "* H₀: μ_sleep = μ_usage\n* H₁: μ_sleep ≠ μ_usage\n* t = 22.95, p = 1.90×10⁻⁸⁷ < 0.05 → 귀무가설 기각\n* 결론: 수면 시간과 사용 시간 평균이 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"Students Social Media Addiction.csv\" --request \"성별(Gender)과 ‘학업 성과에 영향(Yes/No)’(Affects_Academic_Performance) 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정 (Chi-Squared Test)",
-      "answer": "* H₀: 두 변수는 독립이다\n* H₁: 독립이 아니다\n* χ² = 0.334, p = 0.563 > 0.05 → 귀무가설 채택\n* 결론: 성별과 학업 성과 영향 여부는 통계적으로 독립입니다."
-    },
-    {
-      "command": "python -m src.main --file \"Students Social Media Addiction.csv\" --request \"연애 상태(Relationship_Status: In Relationship, Single, Complicated)별 중독 점수(Addicted_Score) 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "* H₀: 세 집단의 평균이 같다\n* H₁: 적어도 한 집단 평균이 다르다\n* F = 2.80, p = 0.0613 > 0.05 → 귀무가설 채택\n* 결론: 연애 상태별 중독 점수 평균 차이는 통계적으로 유의미하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"Students Social Media Addiction.csv\" --request \"일일 사용 시간(Avg_Daily_Usage_Hours)과 중독 점수(Addicted_Score) 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관계수 유의성 검정",
-      "answer": "* H₀: ρ = 0\n* H₁: ρ ≠ 0\n* r = 0.832, p = 4.70×10⁻¹⁸² < 0.05 → 귀무가설 기각\n* 결론: 사용 시간과 중독 점수는 강한 양의 상관관계를 가집니다."
-    },
-    {
-      "command": "python -m src.main --file \"Students Social Media Addiction.csv\" --request \"전체 학생 중 ‘학업 성과에 영향 있다(Yes)’ 응답 비율이 50%인지 검정하십시오.\"",
-      "tag": "단일 비율 검정 (One-Proportion Z-Test)",
-      "answer": "* H₀: p = 0.5\n* H₁: p ≠ 0.5\n* 관측 비율 p̂ ≈ 0.60, z = 7.12, p = 3.73×10⁻¹⁴ < 0.05 → 귀무가설 기각\n* 결론: 영향 있다고 답한 비율은 50%와 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"Students Social Media Addiction.csv\" --request \"‘영향 있다(Yes)’ 그룹과 ‘영향 없다(No)’ 그룹 간 수면 시간(Sleep_Hours_Per_Night) 분산이 동일합니까?\"",
-      "tag": "등분산성 검정 (Levene's Test)",
-      "answer": "* H₁: 분산이 다르다\n* W = 25.53, p = 5.57×10⁻⁷ < 0.05 → 귀무가설 기각\n* 결론: 두 그룹의 수면 시간 분산이 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"Students Social Media Addiction.csv\" --request \"중독 점수(Addicted_Score) 분포는 정규분포를 따릅니까?\"",
-      "tag": "정규성 검정 (Shapiro-Wilk Test)",
-      "answer": "* H₀: 정규분포\n* H₁: 비정규분포\n* W = 0.926, p = 5.46×10⁻¹⁵ < 0.05 → 귀무가설 기각\n* 결론: 중독 점수 분포는 정규성을 만족하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"Students Social Media Addiction.csv\" --request \"단순선형회귀에서 ‘일일 사용 시간’(Avg_Daily_Usage_Hours)이 ‘중독 점수’(Addicted_Score)를 예측하는 데 유의미합니까?\"",
-      "tag": "회귀계수 유의성 검정",
-      "answer": "* H₀: β₁ = 0\n* H₁: β₁ ≠ 0\n* β₁의 p = 4.70×10⁻¹⁸² < 0.05 → 귀무가설 기각\n* 결론: 일일 사용 시간은 중독 점수를 예측하는 유의미한 설명변수입니다."
-    }
-  ],
-  "migraine_symptom_classification.csv": [
-    {
-      "command": "python -m src.main --file \"migraine_symptom_classification.csv\" --request \"응답자의 연령(Age) 평균은 45세(μ₀＝45)와 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정 (One-Sample T-Test)",
-      "answer": "* H₀: μ = 45\n* H₁: μ ≠ 45\n* 검정통계량 t = –20.30, p = 2.08×10⁻⁷⁰ < 0.05 → 귀무가설 기각\n* 결론: 응답자의 평균 연령은 45세와 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"migraine_symptom_classification.csv\" --request \"메스꺼움 유무(Nausea: 1=Yes, 0=No)에 따라 통증 강도(Intensity, 1–5 척도) 평균에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정 (Independent Samples T-Test)",
-      "answer": "* H₀: μ₁ = μ₀ (Yes 그룹 = No 그룹)\n* H₁: μ₁ ≠ μ₀\n* 검정통계량 t = 0.11, p = 0.912 > 0.05 → 귀무가설 채택\n* 결론: 메스꺼움 유무에 따른 통증 강도 평균 차이는 통계적으로 유의미하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"migraine_symptom_classification.csv\" --request \"같은 환자의 발작 지속 시간(Duration, 분)과 통증 강도(Intensity) 평균에 차이가 있습니까?\"",
-      "tag": "대응표본 T-검정 (Paired Samples T-Test)",
-      "answer": "* H₀: μ_Duration = μ_Intensity\n* H₁: μ_Duration ≠ μ_Intensity\n* 검정통계량 t = −11.57, p = 7.62×10⁻⁴⁶ < 0.05 → 귀무가설 기각\n* 결론: Duration과 Intensity 평균이 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"migraine_symptom_classification.csv\" --request \"편두통 유형(Type)과 구토 유무(Vomit: 1=Yes, 0=No) 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정 (Chi-Squared Test)",
-      "answer": "* H₀: 두 변수는 독립이다\n* H₁: 독립이 아니다\n* χ² = 39.10, p = 1.51×10⁻⁵ < 0.05 → 귀무가설 기각\n* 결론: 특정 편두통 유형에 따라 구토 유무가 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"migraine_symptom_classification.csv\" --request \"편두통 유형(Type)별로 통증 강도(Intensity) 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "* H₀: 모든 유형의 μ_Intensity가 같다\n* H₁: 적어도 하나의 유형 μ_Intensity가 다르다\n* F = 12.34, p = 1.19×10⁻⁸² < 0.05 → 귀무가설 기각\n* 결론: 편두통 유형별로 Intensity 평균이 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"migraine_symptom_classification.csv\" --request \"연령(Age)과 통증 강도(Intensity) 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관계수 유의성 검정",
-      "answer": "* H₀: ρ = 0\n* H₁: ρ ≠ 0\n* Pearson r = –0.10, p = 0.0225 < 0.05 → 귀무가설 기각\n* 결론: 연령이 증가할수록 Intensity가 약간 감소하는 통계적으로 유의미한 음의 상관관계가 있습니다."
-    },
-    {
-      "command": "python -m src.main --file \"migraine_symptom_classification.csv\" --request \"전체 응답자 중 광선공포증(Photophobia=1) 경험 비율은 80%입니까?\"",
-      "tag": "단일 비율 검정 (One-Proportion Z-Test)",
-      "answer": "* H₀: p = 0.80\n* H₁: p ≠ 0.80\n* 관측 비율 p̂ ≈ 0.98, z = 10.54, p < 0.001 → 귀무가설 기각\n* 결론: Photophobia 경험 비율은 80%보다 통계적으로 유의미하게 높습니다."
-    },
-    {
-      "command": "python -m src.main --file \"migraine_symptom_classification.csv\" --request \"Photophobia 유무(Photophobia=1 vs 0)에 따라 발작 빈도(Frequency) 분산이 동일합니까?\"",
-      "tag": "등분산성 검정 (Levene's Test)",
-      "answer": "* H₀: 두 그룹 분산이 같다\n* H₁: 분산이 다르다\n* Levene W = 1.02, p = 0.312 > 0.05 → 귀무가설 채택\n* 결론: Photophobia 여부에 따른 Frequency 분산 차이는 통계적으로 유의미하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"migraine_symptom_classification.csv\" --request \"발작 빈도(Frequency, 회/월) 분포는 정규분포를 따릅니까?\"",
-      "tag": "정규성 검정 (Shapiro-Wilk Test)",
-      "answer": "* H₀: 정규분포\n* H₁: 비정규분포\n* Shapiro-Wilk W = 0.82, p = 4.90×10⁻²³ < 0.05 → 귀무가설 기각\n* 결론: Frequency 분포는 정규성을 만족하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"migraine_symptom_classification.csv\" --request \"단순선형회귀모델에서 ‘발작 지속 시간’(Duration)이 ‘발작 빈도’(Frequency)를 예측하는 데 유의미합니까?\"",
-      "tag": "회귀계수 유의성 검정",
-      "answer": "* H₀: β₁ = 0\n* H₁: β₁ ≠ 0\n* β₁의 p = 0.00277 < 0.05 → 귀무가설 기각\n* 결론: Duration은 Frequency 예측에 통계적으로 유의미한 설명변수입니다."
-    }
-  ],
-  "remote_worker_productivity_1000.csv": [
-    {
-      "command": "python -m src.main --file \"remote_worker_productivity_1000.csv\" --request \"원격 근무자의 평균 일일 근무 시간(average_daily_work_hours)은 8시간과 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정 (One-Sample T-Test)",
-      "answer": "* H₀: μ = 8\n* H₁: μ ≠ 8:_x000B_t(999) = –13.42, p ≈ 6.83×10⁻³⁸ < 0.05 → 귀무가설 기각_x000B_→ 평균 일일 근무 시간은 8시간과 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"remote_worker_productivity_1000.csv\" --request \"AI 보조 계획(AI_assisted_planning=1) 사용 그룹과 비사용 그룹 간 업무 완료율(task_completion_rate) 평균에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정 (Independent Samples T-Test)",
-      "answer": "* H₀: μ_AI=1 = μ_AI=0\n* H₁: μ_AI=1 ≠ μ_AI=0\nt = 1.145, p = 0.253 > 0.05 → 귀무가설 채택_x000B_→ AI 보조 계획 사용 여부에 따른 업무 완료율 평균 차이는 유의미하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"remote_worker_productivity_1000.csv\" --request \"같은 근무자의 ‘캘린더 예약 사용 시간’(calendar_scheduled_usage)과 ‘실제 집중 시간’(focus_time_minutes) 평균에 차이가 있습니까?\"",
-      "tag": "대응표본 T-검정 (Paired Samples T-Test)",
-      "answer": "* H₀: μ_calendar = μ_focus\n* H₁: μ_calendar ≠ μ_focus\nt(999) = –72.52, p < 0.001 → 귀무가설 기각_x000B_→ 캘린더 예약 시간과 실제 집중 시간 평균에 통계적으로 유의미한 차이가 있습니다."
-    },
-    {
-      "command": "python -m src.main --file \"remote_worker_productivity_1000.csv\" --request \"근무 위치 유형(location_type: Home/Co-working/Hybrid)과 생산성 레이블(productivity_label: Low/Medium/High) 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정 (Chi-Squared Test)",
-      "answer": "* H₀: 두 변수는 독립이다\n* H₁: 독립이 아니다_x000B_χ²(4) = 4.17, p = 0.383 > 0.05 → 귀무가설 채택_x000B_→ 위치 유형과 생산성 레이블은 통계적으로 독립입니다."
-    },
-    {
-      "command": "python -m src.main --file \"remote_worker_productivity_1000.csv\" --request \"산업 분야(industry_sector)별 도구 사용 빈도(tool_usage_frequency) 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "* H₀: 모든 분야의 μ_tool_usage가 같다\n* H₁: 적어도 하나의 분야가 다르다\nF = 0.290, p = 0.885 > 0.05 → 귀무가설 채택_x000B_→ 산업 분야별로 도구 사용 빈도 평균에 통계적으로 유의미한 차이가 없습니다."
-    },
-    {
-      "command": "python -m src.main --file \"remote_worker_productivity_1000.csv\" --request \"연령(age)과 하루 휴식 횟수(break_frequency_per_day) 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관계수 유의성 검정",
-      "answer": "* H₀: ρ = 0\n* H₁: ρ ≠ 0\nr = –0.010, p = 0.750 > 0.05 → 귀무가설 채택_x000B_→ 연령과 휴식 횟수 간 선형 상관관계는 유의미하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"remote_worker_productivity_1000.csv\" --request \"전체 원격 근무자 중 생산성 레이블 ‘High’ 비율이 30%입니까?\"",
-      "tag": "단일 비율 검정 (One-Proportion Z-Test)",
-      "answer": "* H₀: p = 0.30\n* H₁: p ≠ 0.30\n관측 비율 p̂ = 333/1000 = 0.333, z = 2.277, p = 0.0228 < 0.05 → 귀무가설 기각_x000B_→ ‘High’ 비율은 30%와 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"remote_worker_productivity_1000.csv\" --request \"AI 보조 계획 사용 그룹과 비사용 그룹 간 late_task_ratio 분산이 동일합니까?\"",
-      "tag": "등분산성 검정 (Levene's Test)",
-      "answer": "* H₀: 두 그룹 분산이 같다\n* H₁: 분산이 다르다\nW = 0.547, p = 0.460 > 0.05 → 귀무가설 채택_x000B_→ late_task_ratio 분산은 그룹 간 차이가 없습니다."
-    },
-    {
-      "command": "python -m src.main --file \"remote_worker_productivity_1000.csv\" --request \"‘실시간 피드백 점수’(real_time_feedback_score) 분포는 정규분포를 따릅니까?\"",
-      "tag": "정규성 검정 (Shapiro-Wilk Test)",
-      "answer": "* H₀: 정규분포\n* H₁: 비정규분포\nW = 0.959, p ≈ 1.56×10⁻¹⁰ < 0.05 → 귀무가설 기각_x000B_→ 실시간 피드백 점수 분포는 정규성을 만족하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"remote_worker_productivity_1000.csv\" --request \"단순선형회귀모델에서 ‘도구 사용 빈도’(tool_usage_frequency)가 ‘생산성 점수’(productivity_score)를 예측하는 데 유의미합니까?\"",
-      "tag": "회귀계수 유의성 검정",
-      "answer": "* H₀: β₁ = 0\n* H₁: β₁ ≠ 0\nβ₁의 p = 8.41×10⁻⁹ < 0.05 → 귀무가설 기각_x000B_→ 도구 사용 빈도는 생산성 점수 예측에 통계적으로 유의미한 설명변수입니다."
-    }
-  ],
-  "addiction_population_data.csv": [
-    {
-      "command": "python -m src.main --file \"addiction_population_data.csv\" --request \"응답자의 평균 수면 시간(sleep_hours)은 7시간(μ₀ = 7)과 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정 (One-Sample T-Test)",
-      "answer": "* H₀: μ = 7\n* H₁: μ ≠ 7\n* t(2999) = –19.39, p = 5.16×10⁻⁷⁹ < 0.05 → 귀무가설 기각\n* 결론: 평균 수면 시간은 7시간과 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"addiction_population_data.csv\" --request \"‘운동 빈도’가 Daily인 그룹과 Never인 그룹의 연간 소득(annual_income_usd) 평균에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정 (Independent Samples T-Test)",
-      "answer": "* H₀: μ_Daily = μ_Never\n* H₁: μ_Daily ≠ μ_Never\n* t(민감도≈) = 2.23, p = 0.026 < 0.05 → 귀무가설 기각\n* 결론: 매일 운동하는 그룹의 소득이 전혀 운동하지 않는 그룹과 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"addiction_population_data.csv\" --request \"같은 응답자의 ‘흡연 시작 연령’(age_started_smoking)과 ‘음주 시작 연령’(age_started_drinking) 평균에 차이가 있습니까?\"",
-      "tag": "대응표본 T-검정 (Paired Samples T-Test)",
-      "answer": "* H₀: μ(smoking_start) = μ(drinking_start)\n* H₁: 차이가 있다\n* t = –0.71, p = 0.4806 > 0.05 → 귀무가설 채택\n* 결론: 흡연과 음주 시작 연령의 평균 차이는 통계적으로 유의미하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"addiction_population_data.csv\" --request \"정신 건강 상태(mental_health_status: Poor/Average/Good)와 치료 이력(therapy_history: None/Past/Current) 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정 (Chi-Squared Test)",
-      "answer": "* H₀: 두 변수는 독립이다\n* H₁: 독립이 아니다\n* χ²(4) = 9.606, p = 0.0476 < 0.05 → 귀무가설 기각\n* 결론: 정신 건강 상태에 따라 치료 이력 분포가 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"addiction_population_data.csv\" --request \"고용 상태(employment_status: Employed/Unemployed/Student/…)별 평균 수면 시간(sleep_hours)에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "* H₀: 모든 집단의 μ_sleep이 같다\n* H₁: 적어도 한 집단의 μ_sleep이 다르다\n* F(…, …)=2.688, p = 0.0297 < 0.05 → 귀무가설 기각\n* 결론: 고용 상태별로 평균 수면 시간이 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"addiction_population_data.csv\" --request \"주당 음주량(drinks_per_week)과 하루 흡연량(smokes_per_day) 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관계수 유의성 검정",
-      "answer": "* H₀: ρ = 0\n* H₁: ρ ≠ 0\n* r = –0.016, p = 0.3810 > 0.05 → 귀무가설 채택\n* 결론: 음주량과 흡연량 간 선형 상관관계는 통계적으로 유의미하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"addiction_population_data.csv\" --request \"전체 응답자 3000명 중 Current 상태인 치료 이력(therapy_history = Current)의 비율이 20%입니까?\"",
-      "tag": "단일 비율 검정 (One-Proportion Z-Test)",
-      "answer": "* H₀: p = 0.20\n* H₁: p ≠ 0.20\n* 관측 n = 3000, k = 976 → p̂ ≈ 0.3253\n* z = 17.162, p ≈ 0.000 < 0.05 → 귀무가설 기각\n* 결론: 치료 이력이 Current인 비율은 20%와 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"addiction_population_data.csv\" --request \"치료 이력(therapy_history: Current vs None) 그룹 간 연간 소득(annual_income_usd) 분산이 동일합니까?\"",
-      "tag": "등분산성 검정 (Levene's Test)",
-      "answer": "* H₀: 두 집단 분산이 같다\n* H₁: 분산이 다르다\n* W = 3.54, p = 0.0602 > 0.05 → 귀무가설 채택\n* 결론: 치료 이력 그룹 간 소득 분산 차이는 통계적으로 유의미하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"addiction_population_data.csv\" --request \"자녀 수(children_count) 분포는 정규분포를 따릅니까?\"",
-      "tag": "정규성 검정 (Shapiro-Wilk Test)",
-      "answer": "* H₀: 정규분포\n* H₁: 비정규분포\n* W = 0.907, p = 5.98×10⁻¹⁷ < 0.05 → 귀무가설 기각\n* 결론: 자녀 수 분포는 정규성을 만족하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"addiction_population_data.csv\" --request \"단순선형회귀모델에서 주당 음주량(drinks_per_week)이 연간 소득(annual_income_usd)을 예측하는 데 유의미합니까?\"",
-      "tag": "회귀계수 유의성 검정",
-      "answer": "* 모형: annual_income_usd = β₀ + β₁·drinks_per_week + ε\n* H₀: β₁ = 0\n* H₁: β₁ ≠ 0\n* β₁의 p = 0.4245 > 0.05 → 귀무가설 채택\n* 결론: 주당 음주량은 연간 소득 예측에 통계적으로 유의미하지 않습니다."
-    }
-  ],
-  "ecommerce_customer_behavior.csv": [
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"고객들의 평균 월 지출액이 250달러와 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정",
-      "answer": "고객들의 평균 월 지출액은 250달러보다 통계적으로 유의미하게 높습니다(평균 258.2달러)."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"모바일 사용자와 비사용자 간 고객 만족도에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정",
-      "answer": "모바일 사용자의 고객 만족도가 비사용자보다 통계적으로 유의미하게 높습니다."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"교육 수준(Bachelor/Master/PhD)에 따라 월 지출액 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "교육 수준별 월 지출액 평균이 통계적으로 유의미하게 다릅니다(PhD > Master > Bachelor)."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"소득 수준과 월 지출액 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관분석",
-      "answer": "소득 수준과 월 지출액 사이에 강한 양의 상관관계가 있습니다."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"성별과 로열티 프로그램 가입 여부 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정",
-      "answer": "성별과 로열티 프로그램 가입 여부 간에는 통계적으로 유의미한 연관성이 없습니다."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"웹사이트 체류시간이 월 지출액을 예측하는 유의미한 설명변수입니까?\"",
-      "tag": "회귀분석",
-      "answer": "웹사이트 체류시간은 월 지출액을 예측하는 통계적으로 유의미한 설명변수입니다(양의 관계)."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"고객들의 평균 월 지출액이 250달러와 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정",
-      "answer": "고객들의 평균 월 지출액은 250달러보다 통계적으로 유의미하게 높습니다(평균 258.2달러)."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"모바일 사용자와 비사용자 간 고객 만족도에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정",
-      "answer": "모바일 사용자의 고객 만족도가 비사용자보다 통계적으로 유의미하게 높습니다."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"교육 수준(Bachelor/Master/PhD)에 따라 월 지출액 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "교육 수준별 월 지출액 평균이 통계적으로 유의미하게 다릅니다(PhD > Master > Bachelor)."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"소득 수준과 월 지출액 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관분석",
-      "answer": "소득 수준과 월 지출액 사이에 강한 양의 상관관계가 있습니다."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"성별과 로열티 프로그램 가입 여부 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정",
-      "answer": "성별과 로열티 프로그램 가입 여부 간에는 통계적으로 유의미한 연관성이 없습니다."
-    },
-    {
-      "command": "python -m src.main --file \"ecommerce_customer_behavior.csv\" --request \"웹사이트 체류시간이 월 지출액을 예측하는 유의미한 설명변수입니까?\"",
-      "tag": "회귀분석",
-      "answer": "웹사이트 체류시간은 월 지출액을 예측하는 통계적으로 유의미한 설명변수입니다(양의 관계)."
-    }
-  ],
-  "healthcare_patient_outcomes.csv": [
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"환자들의 평균 BMI가 25와 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정",
-      "answer": "환자들의 평균 BMI는 25보다 통계적으로 유의미하게 높습니다(평균 27.1)."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"흡연자와 비흡연자 간 회복 기간에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정",
-      "answer": "흡연자의 회복 기간이 비흡연자보다 통계적으로 유의미하게 깁니다."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"치료 방법(Surgery/Medication/Physical_Therapy)에 따라 회복 기간 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "치료 방법별 회복 기간 평균이 통계적으로 유의미하게 다릅니다(Surgery > Medication > Physical_Therapy)."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"운동 시간과 회복 기간 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관분석",
-      "answer": "운동 시간과 회복 기간 사이에 강한 음의 상관관계가 있습니다."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"성별과 치료 성공 여부 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정",
-      "answer": "성별과 치료 성공 여부 간에는 통계적으로 유의미한 연관성이 없습니다."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"BMI가 치료 실패 예측에 유의미한 변수입니까?\"",
-      "tag": "로지스틱 회귀",
-      "answer": "BMI가 1 증가할 때마다 치료 실패 확률이 1.23배 증가합니다."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"환자들의 평균 BMI가 25와 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정",
-      "answer": "환자들의 평균 BMI는 25보다 통계적으로 유의미하게 높습니다(평균 27.1)."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"흡연자와 비흡연자 간 회복 기간에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정",
-      "answer": "흡연자의 회복 기간이 비흡연자보다 통계적으로 유의미하게 깁니다."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"치료 방법(Surgery/Medication/Physical_Therapy)에 따라 회복 기간 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "치료 방법별 회복 기간 평균이 통계적으로 유의미하게 다릅니다(Surgery > Medication > Physical_Therapy)."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"운동 시간과 회복 기간 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관분석",
-      "answer": "운동 시간과 회복 기간 사이에 강한 음의 상관관계가 있습니다."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"성별과 치료 성공 여부 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정",
-      "answer": "성별과 치료 성공 여부 간에는 통계적으로 유의미한 연관성이 없습니다."
-    },
-    {
-      "command": "python -m src.main --file \"healthcare_patient_outcomes.csv\" --request \"BMI가 치료 실패 예측에 유의미한 변수입니까?\"",
-      "tag": "로지스틱 회귀",
-      "answer": "BMI가 1 증가할 때마다 치료 실패 확률이 1.23배 증가합니다."
-    }
-  ],
-  "student_survey_dataset.csv": [
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"학생들의 평균 일일 수면시간이 7시간과 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정",
-      "answer": "학생들의 평균 수면시간은 7시간과 통계적으로 유의미한 차이가 없습니다."
+      "number": 10,
+      "dataset": "teachingratings.csv",
+      "question": "교수의 정규직 여부와 성별 사이에 어떤 관계가 있는지 알 수 있을까요?",
+      "answer": "p-value가 0.137로 유의수준 0.05보다 크므로 귀무가설을 기각하지 못합니다. 따라서 정규직 여부와 성별 사이에는 통계적으로 유의미한 연관성이 없다고 결론 내릴 수 있습니다.",
+      "test": "카이제곱 검정 (Chi-squared Test)"
     },
     {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"남학생과 여학생 간 일일 소셜미디어 사용시간에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정",
-      "answer": "성별에 따른 소셜미디어 사용시간의 차이는 통계적으로 유의미하지 않습니다."
+      "number": 11,
+      "dataset": "teachingratings.csv",
+      "question": "교수의 외모와 학생들의 평가 점수는 서로 관련이 있을까요?",
+      "answer": "p-value가 4.25e-05로 유의수준 0.05보다 작으므로 귀무가설을 기각합니다. 이는 외모 점수와 교수 평가 점수 사이에 유의미한 상관관계가 존재함을 의미합니다.",
+      "test": "피어슨 상관분석 (Pearson Correlation)"
     },
     {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"같은 학생의 일일 스크린타임과 비소셜미디어 시간 간에 차이가 있습니까?\"",
-      "tag": "대응표본 T-검정",
-      "answer": "전체 스크린타임과 비소셜미디어 시간 간에 통계적으로 유의미한 차이가 있습니다."
+      "number": 12,
+      "dataset": "teachingratings.csv",
+      "question": "정규직 교수와 비정규직 교수의 평가 점수 간에 차이가 있는지 궁금합니다.",
+      "answer": "T-검정 결과 p-value가 0.0052로 유의수준 0.05보다 작으므로, 귀무가설을 기각합니다. 정규직 여부는 교수 평가 점수에 영향을 미친다고 볼 수 있습니다.",
+      "test": "독립표본 T-검정 (Independent Samples T-test)"
     },
     {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"성별과 스트레스 수준(고/저) 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정",
-      "answer": "성별과 스트레스 수준 간에는 통계적으로 유의미한 연관성이 없습니다."
+      "number": 13,
+      "dataset": "teachingratings.csv",
+      "question": "정규직 교수와 비정규직 교수의 외모 점수는 비슷한 수준으로 분포되어 있나요?",
+      "answer": "Levene 검정 결과 p-value가 0.485로 유의수준 0.05보다 크므로, 두 그룹의 분산은 같다고 가정할 수 있습니다.",
+      "test": "Levene의 등분산 검정 (Levene's Test for Equality of Variances)"
     },
     {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"학년(1-4학년)에 따라 학업성과 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "학년별 학업성과 평균 간에 통계적으로 유의미한 차이가 없습니다."
+      "number": 14,
+      "dataset": "iris.csv",
+      "question": "붓꽃의 종류에 따라 꽃받침의 평균 길이에 차이가 있나요?",
+      "answer": "분산분석(ANOVA) 결과 p-value는 0.05보다 매우 작게 나타납니다 (p < 0.001). 따라서 귀무가설을 기각하며, 세 붓꽃 종 간의 꽃받침 길이 평균에는 통계적으로 유의미한 차이가 있다고 결론 내릴 수 있습니다.",
+      "test": "분산 분석 (ANOVA)"
     },
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"일일 스크린타임과 학업성과 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관분석",
-      "answer": "스크린타임과 학업성과 사이에 강한 음의 상관관계가 있습니다."
-    },
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"전체 학생 중 고스트레스군 비율이 50%입니까?\"",
-      "tag": "단일 비율 검정",
-      "answer": "고스트레스군 비율은 50%와 통계적으로 유의미하게 다릅니다(실제 68%)."
-    },
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"남녀 간 삶의 만족도 분산이 동일합니까?\"",
-      "tag": "등분산성 검정",
-      "answer": "남녀 간 삶의 만족도 분산은 통계적으로 동일합니다."
-    },
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"우울 점수 분포는 정규분포를 따릅니까?\"",
-      "tag": "정규성 검정",
-      "answer": "우울 점수 분포는 정규성을 만족하지 않습니다."
-    },
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"소셜미디어 사용시간이 삶의 만족도를 예측하는 유의미한 설명변수입니까?\"",
-      "tag": "회귀분석",
-      "answer": "소셜미디어 사용시간은 삶의 만족도를 예측하는 유의미한 설명변수입니다(음의 관계)."
-    },
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"운동량에 따른 스트레스 수준 분포에 차이가 있습니까?\"",
-      "tag": "Mann-Whitney U 검정",
-      "answer": "운동량에 따른 스트레스 수준 분포가 통계적으로 유의미하게 다릅니다."
-    },
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"학년별 불안 점수 분포에 차이가 있습니까?\"",
-      "tag": "Kruskal-Wallis 검정",
-      "answer": "학년별 불안 점수 분포가 통계적으로 유의미하게 다르며 특히 1학년과 4학년 간 차이가 있습니다."
-    },
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"성별과 학년이 학업성과에 미치는 주효과와 상호작용 효과가 있습니까?\"",
-      "tag": "이원분산분석",
-      "answer": "성별과 학년 모두 학업성과에 유의미한 영향을 주지 않으며 상호작용도 없습니다."
-    },
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"스크린타임 수면시간 운동횟수가 학업성과를 예측하는 모델이 유의미합니까?\"",
-      "tag": "다중회귀분석",
-      "answer": "스크린타임과 수면시간이 학업성과를 유의미하게 예측하는 변수입니다(R² = 0.617)."
-    },
-    {
-      "command": "python -m src.main --file \"student_survey_dataset.csv\" --request \"소셜미디어 사용시간이 고우울군 예측에 유의미한 변수입니까?\"",
-      "tag": "로지스틱 회귀",
-      "answer": "소셜미디어 사용시간이 1시간 증가할 때마다 고우울군이 될 확률이 4.35배 증가합니다."
-    }
-  ],
-  "employee_performance_satisfaction.csv": [
-    {
-      "command": "python -m src.main --file \"employee_performance_satisfaction.csv\" --request \"직원들의 평균 성과 점수가 8.0과 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정",
-      "answer": "직원들의 평균 성과 점수는 8.0보다 통계적으로 유의미하게 높습니다(평균 8.2)."
-    },
-    {
-      "command": "python -m src.main --file \"employee_performance_satisfaction.csv\" --request \"승진한 직원과 하지 않은 직원 간 직무 만족도에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정",
-      "answer": "승진한 직원의 직무 만족도가 하지 않은 직원보다 통계적으로 유의미하게 높습니다."
-    },
-    {
-      "command": "python -m src.main --file \"employee_performance_satisfaction.csv\" --request \"부서(Engineering/Sales/Marketing/HR/Finance)에 따라 성과 점수 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "부서별 성과 점수 평균이 통계적으로 유의미하게 다릅니다(Engineering > Finance > Sales > Marketing > HR)."
-    },
-    {
-      "command": "python -m src.main --file \"employee_performance_satisfaction.csv\" --request \"교육 시간과 성과 점수 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관분석",
-      "answer": "교육 시간과 성과 점수 사이에 중간 정도의 양의 상관관계가 있습니다."
-    },
-    {
-      "command": "python -m src.main --file \"employee_performance_satisfaction.csv\" --request \"부서와 이직 의도 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정",
-      "answer": "부서와 이직 의도 간에 통계적으로 유의미한 연관성이 있습니다(HR에서 이직 의도 높음)."
-    },
-    {
-      "command": "python -m src.main --file \"employee_performance_satisfaction.csv\" --request \"연봉 교육시간 워라밸이 직무 만족도를 예측하는 모델이 유의미합니까?\"",
-      "tag": "다중회귀분석",
-      "answer": "연봉과 워라밸이 직무 만족도를 유의미하게 예측하는 변수입니다(R² = 0.588)."
-    }
-  ],
-  "climate_change_impact.csv": [
-    {
-      "command": "python -m src.main --file \"climate_change_impact.csv\" --request \"지역들의 평균 기온 변화가 2.0도와 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정",
-      "answer": "지역들의 평균 기온 변화는 2.0도보다 통계적으로 유의미하게 높습니다(평균 2.14도)."
-    },
-    {
-      "command": "python -m src.main --file \"climate_change_impact.csv\" --request \"적응 투자 수준이 높은 국가와 낮은 국가 간 경제적 영향 점수에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정",
-      "answer": "적응 투자 수준이 높은 국가의 경제적 영향 점수가 낮은 국가보다 통계적으로 유의미하게 낮습니다."
-    },
-    {
-      "command": "python -m src.main --file \"climate_change_impact.csv\" --request \"기후대(Arctic/Tropical/Arid/Temperate/etc)에 따라 기온 변화 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "기후대별 기온 변화 평균이 통계적으로 유의미하게 다릅니다(Continental > Arctic > Arid)."
-    },
-    {
-      "command": "python -m src.main --file \"climate_change_impact.csv\" --request \"CO2 배출량과 경제적 영향 점수 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관분석",
-      "answer": "CO2 배출량과 경제적 영향 점수 사이에 약한 양의 상관관계가 있습니다."
-    },
-    {
-      "command": "python -m src.main --file \"climate_change_impact.csv\" --request \"기후대와 적응 투자 수준 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정",
-      "answer": "기후대와 적응 투자 수준 간에는 통계적으로 유의미한 연관성이 없습니다."
-    },
-    {
-      "command": "python -m src.main --file \"climate_change_impact.csv\" --request \"재생에너지 비율이 경제적 영향 점수를 예측하는 유의미한 설명변수입니까?\"",
-      "tag": "회귀분석",
-      "answer": "재생에너지 비율이 증가할수록 경제적 영향 점수가 감소합니다(음의 관계)."
-    }
-  ],
-  "socialmedia_engagement.csv": [
     {
-      "command": "python -m src.main --file \"socialmedia_engagement.csv\" --request \"사용자들의 평균 정신건강 점수가 7.0과 통계적으로 차이가 있습니까?\"",
-      "tag": "일표본 T-검정",
-      "answer": "사용자들의 평균 정신건강 점수는 7.0과 통계적으로 유의미한 차이가 없습니다."
+      "number": 15,
+      "dataset": "titanic.csv",
+      "question": "타이타닉호에서 승객의 좌석 등급이 생존 여부와 관련이 있었을까요?",
+      "answer": "카이제곱 검정 결과 p-value는 0.05보다 매우 작습니다. 따라서 귀무가설(좌석 등급과 생존 여부는 독립이다)을 기각하고, 승객의 좌석 등급과 생존 여부 사이에는 통계적으로 유의미한 연관성이 있다고 결론 내릴 수 있습니다.",
+      "test": "카이제곱 검정 (Chi-squared Test)"
     },
     {
-      "command": "python -m src.main --file \"socialmedia_engagement.csv\" --request \"인플루언서와 일반 사용자 간 화면 시청 시간에 차이가 있습니까?\"",
-      "tag": "독립표본 T-검정",
-      "answer": "인플루언서의 화면 시청 시간이 일반 사용자보다 통계적으로 유의미하게 깁니다."
+      "number": 16,
+      "dataset": "tips.csv",
+      "question": "식당에서 흡연자와 비흡연자가 내는 팁 금액에 차이가 있는지 알고 싶습니다.",
+      "answer": "독립표본 T-검정 결과 p-value는 일반적으로 0.05보다 크게 나타납니다. 따라서 귀무가설을 기각하지 못하며, 흡연 여부에 따른 평균 팁 금액에 통계적으로 유의미한 차이가 있다고 보기 어렵습니다.",
+      "test": "독립표본 T-검정 (Independent Samples T-test)"
     },
     {
-      "command": "python -m src.main --file \"socialmedia_engagement.csv\" --request \"플랫폼 유형(Instagram/LinkedIn/TikTok/Twitter/Facebook)에 따라 참여율 평균에 차이가 있습니까?\"",
-      "tag": "분산분석 (ANOVA)",
-      "answer": "플랫폼별 참여율 평균이 통계적으로 유의미하게 다릅니다(TikTok > Instagram > Twitter > LinkedIn > Facebook)."
+      "number": 17,
+      "dataset": "mpg.csv",
+      "question": "자동차의 무게가 연비에 어떤 영향을 미치는지, 무게를 통해 연비를 예측할 수 있는지 알려주세요.",
+      "answer": "단순 선형 회귀분석 결과, 무게(weight) 변수의 회귀계수에 대한 p-value는 0.05보다 매우 작게 나타납니다. 따라서 귀무가설을 기각하며, 자동차의 무게는 연비를 예측하는 데 통계적으로 유의미한 변수입니다. 일반적으로 회귀계수는 음수 값을 가져, 무게가 무거울수록 연비가 낮아지는 음의 상관관계가 있음을 의미합니다.",
+      "test": "단순 선형 회귀분석 (Simple Linear Regression)"
     },
     {
-      "command": "python -m src.main --file \"socialmedia_engagement.csv\" --request \"일일 화면 시청 시간과 정신건강 점수 사이에 선형 상관관계가 있습니까?\"",
-      "tag": "상관분석",
-      "answer": "화면 시청 시간과 정신건강 점수 사이에 중간 정도의 음의 상관관계가 있습니다."
+      "number": 18,
+      "dataset": "titanic.csv",
+      "question": "타이타닉호 승객의 성별과 생존 여부 사이에 연관성이 있는지 확인해 주세요.",
+      "answer": "카이제곱 검정 결과 p-value는 0.05보다 매우 작습니다. 따라서 귀무가설을 기각하며, 성별과 생존 여부 사이에는 매우 강한 통계적 연관성이 있다고 결론 내릴 수 있습니다.",
+      "test": "카이제곱 검정 (Chi-squared Test)"
     },
     {
-      "command": "python -m src.main --file \"socialmedia_engagement.csv\" --request \"성별과 인플루언서 상태 사이에 연관성이 있습니까?\"",
-      "tag": "카이제곱 독립성 검정",
-      "answer": "성별과 인플루언서 상태 간에는 통계적으로 유의미한 연관성이 없습니다."
+      "number": 19,
+      "dataset": "boston_housing.csv",
+      "question": "보스턴 지역에서 주택의 방 개수가 많을수록 가격도 높아지는지 궁금합니다.",
+      "answer": "단순 선형 회귀분석 결과, 평균 방 개수(RM) 변수의 회귀계수에 대한 p-value는 0.05보다 매우 작습니다. 따라서 방 개수는 주택 가격을 예측하는 데 통계적으로 유의미한 변수이며, 회귀계수는 양수 값을 가져 방 개수가 많을수록 주택 가격이 높아지는 경향을 보입니다.",
+      "test": "단순 선형 회귀분석 (Simple Linear Regression)"
     },
     {
-      "command": "python -m src.main --file \"socialmedia_engagement.csv\" --request \"팔로워 수 일일 게시물 수 화면 시청 시간이 정신건강 점수를 예측하는 모델이 유의미합니까?\"",
-      "tag": "다중회귀분석",
-      "answer": "화면 시청 시간과 일일 게시물 수가 정신건강 점수를 유의미하게 예측하는 변수입니다(R² = 0.519)."
+      "number": 20,
+      "dataset": "pima-indians-diabetes.csv",
+      "question": "당뇨병이 있는 사람과 없는 사람 사이에 공복 혈당 수치에 차이가 있나요?",
+      "answer": "독립표본 T-검정 결과 p-value가 0.05보다 매우 작으므로, 귀무가설을 기각합니다. 당뇨병 발병 여부에 따라 공복 혈당 수치 평균에 통계적으로 유의미한 차이가 있다고 결론 내릴 수 있습니다.",
+      "test": "독립표본 T-검정 (Independent Samples T-test)"
     }
   ]
 }

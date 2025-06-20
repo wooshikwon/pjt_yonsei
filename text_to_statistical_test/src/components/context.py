@@ -9,8 +9,9 @@ class Context:
         """Context 객체를 초기화합니다."""
         self.user_input: Dict[str, str] = {}
         self.rag_results: List[str] = []
-        self.data_info: Dict[str, Any] = {}
+        self.data_summary: str = ""
         self.analysis_plan: List[str] = []
+        self.plan_execution_summary: List[Dict[str, str]] = []
         self.conversation_history: List[Dict[str, str]] = []
         self.final_report: Optional[str] = None
 
@@ -33,20 +34,14 @@ class Context:
         """
         self.rag_results.append(result)
 
-    def set_data_info(self, schema: dict, null_values: dict, sample_data: str) -> None:
+    def set_data_summary(self, summary: str) -> None:
         """
-        탐색적 데이터 분석(EDA) 결과를 설정합니다.
+        데이터 프로파일러가 생성한 요약 정보를 설정합니다.
 
         Args:
-            schema (dict): 데이터의 스키마 정보.
-            null_values (dict): 컬럼별 결측치 정보.
-            sample_data (str): 데이터의 샘플.
+            summary (str): 데이터 요약 정보가 담긴 Markdown 문자열.
         """
-        self.data_info = {
-            'schema': schema,
-            'null_values': null_values,
-            'sample_data': sample_data
-        }
+        self.data_summary = summary
 
     def set_analysis_plan(self, plan: List[str]) -> None:
         """
@@ -56,6 +51,10 @@ class Context:
             plan (List[str]): 단계별 분석 계획 리스트.
         """
         self.analysis_plan = plan
+
+    def add_step_to_summary(self, step: str, status: str) -> None:
+        """분석 계획 실행 요약에 단계별 결과를 추가합니다."""
+        self.plan_execution_summary.append({"step": step, "status": status})
 
     def add_to_history(self, entry: Dict[str, str]) -> None:
         """
@@ -85,8 +84,9 @@ class Context:
         return {
             "user_input": self.user_input,
             "rag_results": self.rag_results,
-            "data_info": self.data_info,
+            "data_summary": self.data_summary,
             "analysis_plan": self.analysis_plan,
+            "plan_execution_summary": self.plan_execution_summary,
             "conversation_history": self.conversation_history,
             "final_report": self.final_report,
         } 

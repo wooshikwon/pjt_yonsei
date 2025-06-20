@@ -5,6 +5,7 @@ from datetime import datetime
 import sys
 import os
 from dotenv import load_dotenv
+import traceback
 
 # 통합된 경고 및 로깅 설정
 from src.utils.warnings_config import setup_warnings_and_logging
@@ -18,12 +19,13 @@ from src.components.rag_retriever import RAGRetriever
 from src.components.code_executor import CodeExecutor
 from src.agent import Agent
 from src.utils.logger import get_logger
+from src.utils.data_profiler import profile_dataframe
 
 app = typer.Typer()
 
 @app.command()
 def analyze(
-    file_name: str = typer.Option(..., "--file", help="Name of the data file in 'input_data/data_files/'"),
+    file_name: str = typer.Option(..., "--file", help="Name of the data file in 'input/data_files/'"),
     request: str = typer.Option(..., "--request", help="Your natural language request for analysis.")
 ):
     """
@@ -46,10 +48,10 @@ def analyze(
 
     # 경로 설정
     base_path = Path.cwd()
-    input_file_path = base_path / "input_data/data_files" / file_name
+    input_file_path = base_path / "input" / "data_files" / file_name
     knowledge_base_path = str(base_path / "resources/knowledge_base")
     vector_store_path = str(base_path / "resources/rag_index")
-    report_path = base_path / "output_data/reports"
+    report_path = base_path / "output" / "reports"
     report_path.mkdir(parents=True, exist_ok=True)
 
     # 컴포넌트 인스턴스화
@@ -122,9 +124,7 @@ def analyze(
             df = pd.read_parquet(input_file_path)
         else:
             raise ValueError(f"Unsupported file type: {input_file_path.suffix}")
-        
-        logger.log_detailed(f"Data shape: {df.shape}")
-        logger.log_detailed(f"Columns: {list(df.columns)}")
+
         logger.log_step_success(2, f"데이터 로딩 완료 ({df.shape[0]}행, {df.shape[1]}열)")
     except FileNotFoundError:
         error_msg = f"파일을 찾을 수 없습니다: {input_file_path}"
@@ -140,10 +140,9 @@ def analyze(
     # --- Step 3: 통계 분석 계획 수립 ---
     logger.log_step_start(3, "분석 계획 수립")
     try:
-        schema = {col: str(dtype) for col, dtype in df.dtypes.to_dict().items()}
-        null_values = df.isnull().sum().to_dict()
-        sample_data = df.head().to_string()
-        context.set_data_info(schema=schema, null_values=null_values, sample_data=sample_data)
+        # 데이터 프로파일링 수행
+        data_summary = profile_dataframe(df)
+        context.set_data_summary(data_summary)
 
         plan = agent.generate_analysis_plan(context)
         context.set_analysis_plan(plan)
@@ -166,13 +165,32 @@ def analyze(
             step_num = i + 1
             logger.log_detailed(f"\nExecuting Step {step_num}: {step}")
             
-            code = agent.generate_code_for_step(context, step)
+            response_dict = agent.generate_code_for_step(context, step)
+            status = response_dict.get("status", "EXECUTED")
+            code = response_dict.get("code", "")
+            
             logger.log_generated_code(step_num, code)
 
-            result, success = executor.run(code, global_vars={'df': df})
+            if status == "SKIPPED":
+                logger.log_execution_result(step_num, f"Step skipped: {code}", True)
+                context.add_step_to_summary(step, "Skipped")
+                context.add_to_history({'role': 'assistant', 'code': code})
+                context.add_to_history({'role': 'system', 'result': 'Step was skipped as conditions were not met.'})
+                continue
+
+            result, success, df_after_execution = executor.run(code, global_vars={'df': df})
             logger.log_execution_result(step_num, result, success)
             
             if success:
+                # 상태 업데이트: [PREP] 태그가 있는 단계에서만 df를 업데이트
+                if step.strip().startswith("[PREP]") and df_after_execution is not None:
+                    df = df_after_execution
+                    logger.log_detailed(f"DataFrame state updated after step: {step_num}")
+                    # 데이터 요약 정보도 함께 업데이트
+                    context.set_data_summary(profile_dataframe(df))
+                    logger.log_detailed("Data summary has been updated.")
+
+                context.add_step_to_summary(step, "Success")
                 context.add_to_history({'role': 'assistant', 'code': code})
                 context.add_to_history({'role': 'system', 'result': result})
             else:
@@ -180,18 +198,32 @@ def analyze(
                 context.add_to_history({'role': 'assistant', 'code': code})
                 context.add_to_history({'role': 'system', 'error': result})
                 
-                corrected_code = agent.self_correct_code(context, step, code, result)
-                logger.log_detailed(f"Corrected code generated for step {step_num}")
-                
-                result, success = executor.run(corrected_code, global_vars={'df': df})
-                logger.log_execution_result(step_num, f"CORRECTED: {result}", success)
-                
-                if success:
-                    context.add_to_history({'role': 'assistant', 'code': corrected_code})
-                    context.add_to_history({'role': 'system', 'result': result})
-                else:
+                try:
+                    response_dict = agent.self_correct_code(context, step, code, result)
+                    corrected_code = response_dict.get("code", "")
+                    logger.log_detailed(f"Corrected code generated for step {step_num}")
+                    
+                    result, success, df_after_execution = executor.run(corrected_code, global_vars={'df': df})
+                    logger.log_execution_result(step_num, f"CORRECTED: {result}", success)
+                    
+                    if success:
+                        # 상태 업데이트: [PREP] 태그가 있는 단계에서만 df를 업데이트
+                        if step.strip().startswith("[PREP]") and df_after_execution is not None:
+                            df = df_after_execution
+                            logger.log_detailed(f"DataFrame state updated after step: {step_num} (Corrected)")
+                            # 데이터 요약 정보도 함께 업데이트
+                            context.set_data_summary(profile_dataframe(df))
+                            logger.log_detailed("Data summary has been updated after correction.")
+                            
+                        context.add_step_to_summary(step, "Success (Corrected)")
+                        context.add_to_history({'role': 'assistant', 'code': corrected_code})
+                        context.add_to_history({'role': 'system', 'result': result})
+                    else:
+                        raise RuntimeError("Self-correction failed to execute.")
+                except Exception as e:
                     failed_steps += 1
-                    logger.log_detailed(f"FATAL: Self-correction failed for step {step_num}")
+                    context.add_step_to_summary(step, "Failure (Correction Failed)")
+                    logger.log_detailed(f"FATAL: Self-correction failed for step {step_num}. Error: {e}")
         
         if failed_steps == 0:
             logger.log_step_success(4, f"모든 분석 단계 성공적으로 완료")
@@ -199,14 +231,17 @@ def analyze(
             logger.log_step_success(4, f"분석 완료 (일부 단계 실패: {failed_steps}개)")
             
     except Exception as e:
-        logger.log_step_failure(4, str(e))
-        logger.log_detailed(f"Analysis execution error: {e}", "ERROR")
+        # --- 향상된 에러 로깅 ---
+        tb_str = traceback.format_exc()
+        logger.log_step_failure(4, f"An unexpected error occurred: {e}")
+        logger.log_detailed(f"Analysis execution error: {e}\n{tb_str}", "ERROR")
+        logger.log_detailed(f"Context at the time of error: {context.get_full_context()}", "ERROR")
         sys.exit(1)
     
     # --- Step 5: 최종 보고서 생성 ---
     logger.log_step_start(5, "최종 보고서 생성")
     try:
-        final_report = agent.generate_final_report(context)
+        final_report = agent.generate_final_report(context, final_data_shape=df.shape)
         context.set_final_report(final_report)
         logger.log_step_success(5, "보고서 생성 완료")
     except Exception as e:
@@ -215,9 +250,17 @@ def analyze(
         final_report = "보고서 생성 중 오류가 발생했습니다."
     
     # --- 결과 출력 및 저장 ---
-    logger.print_final_report(final_report)
+    cleaned_report = final_report.strip()
+    if cleaned_report.startswith("```markdown"):
+        cleaned_report = cleaned_report[11:]
+    if cleaned_report.endswith("```"):
+        cleaned_report = cleaned_report[:-3]
+    
+    logger.print_final_report(cleaned_report.strip())
     
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    
+    # 보고서 파일 저장
     report_file_name = f"report-{timestamp}.md"
     report_file_path = report_path / report_file_name
     
@@ -227,6 +270,18 @@ def analyze(
         logger.log_report_saved(str(report_file_path))
     except Exception as e:
         logger.log_detailed(f"Failed to save report: {e}", "ERROR")
+
+    # 최종 데이터프레임 저장
+    final_data_path = base_path / "output" / "data_files"
+    final_data_path.mkdir(parents=True, exist_ok=True)
+    final_data_filename = f"final_data-{timestamp}.csv"
+    final_data_filepath = final_data_path / final_data_filename
+    
+    try:
+        df.to_csv(final_data_filepath, index=False, encoding='utf-8-sig')
+        logger.log_detailed(f"Final data saved to: {str(final_data_filepath)}")
+    except Exception as e:
+        logger.log_detailed(f"Failed to save final data: {e}", "ERROR")
 
 if __name__ == "__main__":
     app() 

@@ -1,89 +1,94 @@
 PLANNING_PROMPT = """
-You are an expert statistician and data analyst. Your task is to create a detailed, step-by-step statistical analysis plan based on the user's request and the provided data context. The plan must be robust and follow sound statistical principles.
+You are an expert statistician and data analyst. Your task is to create a detailed, step-by-step statistical analysis plan based on the user's request and the provided data context.
 
 **User's Request**:
 {user_request}
 
 **Data Context**:
-- Data Schema: {data_schema}
-- RAG Context: {rag_context}
+{data_summary}
 
-Based on this information, generate a numbered list of all the necessary steps to fully address the user's request. The plan must include:
-1.  **Data Preprocessing**: Necessary filtering, cleaning, or transformation.
-2.  **Pre-tests**: Assumption checks like normality tests (e.g., Shapiro-Wilk), homogeneity of variance tests (e.g., Levene's test), or multicollinearity checks, if applicable.
-3.  **Main Statistical Test**: The core test to answer the user's question (e.g., T-test, ANOVA, Linear/Logistic Regression, Chi-squared test, Correlation, Proportion Test).
-4.  **Post-hoc Analysis / Model Evaluation**: Post-hoc tests (e.g., Tukey's HSD), effect size calculations (e.g., Cohen's d), or model performance evaluation (e.g., R-squared, confusion matrix), if the main test is significant or a model is built.
+**CRITICAL INSTRUCTIONS - FOLLOW THESE STRICTly**:
+1.  **Tag Preprocessing Steps**: Any step that modifies the DataFrame (filtering, handling missing values, creating new columns, etc.) **MUST** start with the `[PREP]` tag. Analysis or test steps should not have this tag.
+2.  **Separate 'Check' from 'Action'**: Each step must have a single, clear purpose. This applies to assumption tests (e.g., normality check) and subsequent actions.
+3.  **Use Conditional Steps**: For actions that depend on a previous check, start the step with "If...".
 
-Your output must be ONLY the numbered list of steps. Do not include any other text or explanation.
+Based on the provided `Data Context`, generate a concise and relevant numbered list of all the necessary steps to fully address the user's request. **Crucially, do not include steps for actions that are clearly unnecessary based on the context.** For instance, if the `Data Context` indicates no missing values, your plan should not include a step for handling them. 
+Your output must be ONLY the numbered list of steps.
 
 ---
 **### EXAMPLES OF ANALYSIS PLANS ###**
 
 **Example (T-test for two groups)**
 *User Request: "A팀과 B팀의 성과 차이가 있는지 분석해줘"*
-1. Filter the data for 'team' column values 'A팀' and 'B팀'.
-2. Perform Shapiro-Wilk test for normality on the 'sales_total' column for 'A팀'.
-3. Perform Shapiro-Wilk test for normality on the 'sales_total' column for 'B팀'.
-4. Perform Levene's test for homogeneity of variances between the two teams' 'sales_total' data.
-5. Based on the results of the pre-tests, execute an Independent Samples T-test or Welch's T-test.
-6. Calculate Cohen's d to determine the effect size of the difference.
+1. [PREP] Create a new dataframe containing only the data for 'A팀' and 'B팀'.
+2. [PREP] Handle missing values in the relevant columns by removing the rows.
+3. For the 'A팀' group, perform a Shapiro-Wilk test for normality on the 'sales_total' column.
+4. For the 'B팀' group, perform a Shapiro-Wilk test for normality on the 'sales_total' column.
+5. Perform Levene's test for homogeneity of variances on 'sales_total' between the two groups.
+6. Based on the normality and homogeneity test results, perform either an Independent Samples t-test or a Welch's t-test.
+7. If the main test is significant, calculate Cohen's d to measure the effect size.
 
-**Example (ANOVA for three or more groups)**
+**Example (ANOVA for three or more groups / ANCOVA)**
 *User Request: "A, B, C 세 팀 간의 고객 만족도에 유의미한 차이가 있는지 알려줘."*
-1. Filter the data to include only 'A팀', 'B팀', 'C팀'.
-2. Check for and handle any missing values in the 'satisfaction_score' column.
-3. Perform Shapiro-Wilk test for normality on 'satisfaction_score' for each of the three teams.
-4. Perform Levene's test for homogeneity of variances across the three groups.
-5. If assumptions are met, perform a One-way ANOVA test. Otherwise, suggest a Kruskal-Wallis test.
-6. If the ANOVA result is statistically significant, perform a Tukey's HSD post-hoc test to identify which specific teams differ from each other.
+1. [PREP] Create a new dataframe containing the group variable ('team'), the dependent variable ('satisfaction_score'), and any potential covariates (e.g., 'age').
+2. [PREP] Handle missing values in the relevant columns by removing the rows.
+3. For each team, perform a Shapiro-Wilk test for normality on 'satisfaction_score'.
+4. Perform Levene's test for homogeneity of variances on 'satisfaction_score' across the teams.
+5. If a covariate is present and relevant, perform ANCOVA. If not, and if assumptions are met, perform One-Way ANOVA. If assumptions are not met, perform a Kruskal-Wallis test.
+6. If the main test result is statistically significant, perform a Tukey's HSD post-hoc test.
 
-**Example (Correlation Analysis)**
-*User Request: "고객 만족도, 재방문 의사, 그리고 평균 구매 금액 사이에는 어떤 상관관계가 있는지 분석해줘."*
-1. Select the continuous variables for analysis: `satisfaction_score`, `revisit_intention`, `avg_purchase_amount`.
-2. Handle any missing values for these columns, for instance, by using listwise deletion.
-3. Check for linear patterns and outliers by examining descriptive statistics and extreme values for each variable.
-4. Calculate the Pearson correlation matrix for the selected variables to quantify the strength and direction of the linear relationships.
-5. Print the correlation matrix with coefficients and their statistical significance (p-values).
-6. Interpret the key correlation coefficients from the matrix, highlighting their strength, direction, and statistical significance.
+**Example (Correlation Analysis - Pearson / Spearman)**
+*User Request: "고객 만족도와 재방문 의사 사이에는 어떤 상관관계가 있는지 분석해줘."*
+1. Perform a Shapiro-Wilk test on both `satisfaction_score` and `revisit_intention` variables to check for normality.
+2. If both variables are normally distributed, calculate the Pearson correlation coefficient.
+3. If at least one variable is not normally distributed, calculate the Spearman rank correlation coefficient.
+4. Print the resulting correlation coefficient and its p-value.
 
 **Example (Linear Regression)**
 *User Request: "광고비와 웹사이트 방문자 수가 매출에 어떤 영향을 미치는지 분석해줘."*
-1. Define the independent variables ('ad_spend', 'website_visitors') and the dependent variable ('revenue').
-2. Check for missing values in all relevant columns and handle them appropriately (e.g., imputation or removal).
-3. Check for multicollinearity between independent variables using the Variance Inflation Factor (VIF).
-4. Check for linearity by examining correlation coefficients between each independent variable and the dependent variable.
-5. Fit an Ordinary Least Squares (OLS) linear regression model using `statsmodels.api`.
-6. Print the model summary to evaluate the overall model fit (R-squared) and the significance of each variable (p-values).
-7. Perform residual analysis by calculating residual statistics to check for homoscedasticity and normality assumptions.
+1. [PREP] Create a new dataframe with the independent variables ('ad_spend', 'website_visitors') and the dependent variable ('revenue').
+2. [PREP] Convert the 'website_visitors' column to a numeric type.
+3. Check for multicollinearity between independent variables using VIF.
+4. If VIF is high, [PREP] consider removing one of the correlated variables.
+5. Fit an Ordinary Least Squares (OLS) linear regression model.
+6. Perform residual analysis to check for linearity, homoscedasticity, and normality of residuals.
+7. If model assumptions are met, print and interpret the model summary.
 
-**Example (Logistic Regression)**
-*User Request: "고객의 나이와 월간 구매 횟수가 구독 서비스 이탈(churn) 여부를 예측할 수 있는지 분석해줘."*
-1. Define independent variables ('age', 'monthly_purchases') and the binary dependent variable ('churn').
-2. Encode the dependent variable 'churn' into 0 (no churn) and 1 (churn).
-3. Handle any missing values in the feature columns.
-4. Standardize the independent variables using `StandardScaler` since they are on different scales.
-5. Fit a Logistic Regression model using `statsmodels.api.Logit`.
-6. Print the model summary, including Pseudo R-squared.
-7. Calculate and print the odds ratios (OR) for each variable by taking the exponent of the coefficients, to interpret their influence on the likelihood of churn.
-8. Evaluate the model's predictive performance using a confusion matrix, accuracy, and precision/recall scores.
+**Example (Logistic Regression - Binary / Multinomial)**
+*User Request: "고객의 나이와 월간 구매 횟수가 고객 등급(실버, 골드, 플래티넘)을 예측할 수 있는지 분석해줘."*
+1. [PREP] Create a new dataframe with the independent variables ('age', 'monthly_purchases') and the dependent variable ('customer_grade').
+2. [PREP] Standardize the continuous independent variables ('age', 'monthly_purchases') using `StandardScaler` for better model performance.
+3. Check the number of unique categories in the dependent variable 'customer_grade'.
+4. If there are two categories, fit a binary Logistic Regression model.
+5. If there are more than two unordered categories, fit a Multinomial Logistic Regression model.
+6. Print the model summary and calculate odds ratios (OR) to interpret the results.
+7. Evaluate model performance using a confusion matrix and classification report.
 
-**Example (Chi-squared Test)**
-*User Request: "학력 수준(고졸, 대졸, 대학원졸)에 따라 선호하는 제품 플랜(베이직, 스탠다드, 프리미엄)에 차이가 있는지 궁금해."*
-1. Select the two categorical variables: 'education_level' and 'preferred_plan'.
-2. Create a contingency table (crosstab) to show the frequency distribution of these two variables.
-3. Perform a Chi-squared test of independence on the contingency table using `scipy.stats.chi2_contingency`.
-4. Check the expected frequencies from the test result to ensure the validity of the test (no cell with expected frequency < 5).
-5. If the result is statistically significant, calculate Cramér's V to measure the strength of the association between the two variables.
-6. Analyze the standardized residuals of the contingency table to identify which specific cells (combinations of education and plan) contribute most to the significant result.
+**Example (Chi-squared Test / Fisher's Exact Test)**
+*User Request: "학력 수준에 따라 선호하는 제품 플랜에 차이가 있는지 궁금해."*
+1. [PREP] Create a dataframe with the two categorical variables: 'education_level' and 'preferred_plan'.
+2. Generate a contingency table (crosstab) from these two variables.
+3. From the contingency table, calculate the expected frequencies for each cell.
+4. Check if any expected frequency is less than 5.
+5. If all expected frequencies are 5 or greater, perform the Chi-squared test of independence.
+6. If any expected frequency is less than 5 and the table is 2x2, perform Fisher's Exact Test as an alternative.
+7. If the chosen test result is statistically significant, calculate Cramér's V to measure the strength of the association.
+
+**Example (Paired T-test / Wilcoxon Signed-Rank Test)**
+*User Request: "운동 프로그램 참여 전후의 체중 변화가 유의미한지 분석해줘."*
+1. [PREP] Calculate the differences between 'after_weight' and 'before_weight' and store it in a new column.
+2. Perform a Shapiro-Wilk test on the calculated differences to check for normality.
+3. If the differences are normally distributed, perform a Paired T-test.
+4. If the differences are not normally distributed, perform a Wilcoxon Signed-Rank Test.
+5. If the test is significant, calculate the effect size.
 
 **Example (Two-Proportion Z-Test)**
 *User Request: "A/B 테스트 결과, A디자인과 B디자인의 클릭률(CTR)에 통계적으로 유의미한 차이가 있는지 검정해줘."*
-1. Filter the dataset to separate group 'A' and group 'B'.
-2. For group A, count the number of successes (e.g., clicks) and the total number of trials (e.g., impressions).
-3. For group B, count the number of successes (clicks) and the total number of trials (impressions).
-4. Perform a two-proportion z-test using `statsmodels.stats.proportion.proportions_ztest`, providing the counts of successes and trials for both groups.
-5. Print the resulting z-statistic and the p-value from the test.
-6. Based on the p-value (e.g., compared to an alpha of 0.05), conclude whether there is a statistically significant difference in click-through rates between the two designs.
+1. For group 'A', count the number of trials and successes from the data.
+2. For group 'B', count the number of trials and successes from the data.
+3. Perform a two-proportion z-test using the counts for both groups.
+4. Print the z-statistic and p-value.
+5. Based on the p-value, conclude if there is a statistically significant difference.
 """
 
 CODE_GENERATION_PROMPT = """
@@ -95,23 +100,47 @@ You are a senior Python data scientist. Your task is to write a single, executab
 **Current Step to Implement**:
 {current_step}
 
+**Latest Data Summary**:
+{data_summary}
+
+**Conversation History (Previous Steps)**:
+This history contains the code executed in previous steps and their results. Use this to inform your code for the current step (e.g., use p-values from a previous test).
+{conversation_history}
+
 **Context**:
 The data is loaded into a pandas DataFrame named `df`. You have access to libraries like `pandas`, `scipy.stats`, and `statsmodels.api`.
 
 **CRITICAL RESTRICTIONS - FOLLOW THESE STRICTLY**:
-❌ NEVER use any visualization commands:
-   - Do NOT use: plt.show(), fig.show(), plotly.show()
-   - Do NOT use: plt.savefig(), fig.savefig(), any image saving
-   - Do NOT use: plt.plot(), sns.plot(), any plotting functions
-   - Do NOT create: graphs, charts, plots, figures, or visual outputs
+❌ NEVER use any visualization commands.
+✅ INSTEAD, provide numerical summaries.
 
-✅ INSTEAD, provide numerical summaries:
-   - Use print() statements for statistical results
-   - Use describe(), corr(), value_counts() for data summaries
-   - Report exact numerical values (means, p-values, coefficients)
-   - Create text-based tables using tabulate or formatted strings
+✅ **STATE MANAGEMENT RULE (VERY IMPORTANT)**:
+   - If the "Current Step to Implement" starts with the `[PREP]` tag, the final DataFrame **MUST** be assigned to a variable named `df_result`.
+   - **Special Exception**: For a `[PREP]` step that splits data into multiple groups (e.g., for a t-test), create new variables for each group (e.g., `df_male`, `df_female`). However, to ensure no data is lost for subsequent steps, you **MUST** assign the original, complete dataframe to `df_result`. Example: `df_result = df`
+   - If the step does not have the `[PREP]` tag, you do not need to assign `df_result`.
 
-Write only the Python code for the "Current Step to Implement". Do not add any explanations, comments, or introductory text. The code should be immediately executable. Your code's output (from `print()` statements) will be used as the input for the next step, so ensure you print any important results like p-values, test statistics, or conclusions.
+✅ **STATUS REPORTING RULE (ABSOLUTE REQUIREMENT)**:
+   - Your final output **MUST** be a JSON object wrapped between `###JSON_START###` and `###JSON_END###`.
+"""
+
+CODE_GENERATION_PROMPT_EXAMPLES = """
+   **Example (Executed):**
+   ###JSON_START###
+   {
+     "status": "EXECUTED",
+     "code": "import pandas as pd\\nprint(df.isnull().sum())\\ndf_result = df"
+   }
+   ###JSON_END###
+   
+   **Example (Skipped):**
+   ###JSON_START###
+   {
+     "status": "SKIPPED",
+     "code": "print('Condition not met: No missing values found, so skipping the imputation step.')"
+   }
+   ###JSON_END###
+
+Your response MUST contain ONLY the ###JSON_START###...###JSON_END### block. Do not add any other text or explanation.
 """
 
 SELF_CORRECTION_PROMPT = """
@@ -145,8 +174,17 @@ You are an expert code debugger. The Python code you previously wrote has failed
    - Report exact numbers, statistics, and p-values
    - Use tabular text output instead of graphs
 
+✅ **STATE MANAGEMENT RULE (VERY IMPORTANT)**:
+   - After correction, the final DataFrame for the next step **MUST** be assigned to the `df_result` variable.
+   - If you modified `df` in-place, ensure the last line is `df_result = df`.
+
+✅ **STATUS REPORTING RULE (ABSOLUTE REQUIREMENT)**:
+   - Your final output **MUST** be a JSON object with two keys: "status" and "code".
+   - "status" must always be "EXECUTED" as you are correcting a failed execution.
+   - "code" must contain the corrected, executable Python code.
+
 Analyze the error message and the available data context. Rewrite the code to fix the error while still achieving the original goal.
-Your output must be ONLY the corrected, executable Python code. Do not include any explanations.
+Your output must be ONLY the JSON object described above, wrapped between `###JSON_START###` and `###JSON_END###`.
 """
 
 REPORTING_PROMPT = """
@@ -154,10 +192,16 @@ You are a professional data analyst and business consultant. You are tasked with
 
 **Analysis Context**:
 - Original User Request: {user_request}
+- Plan Execution Summary:
+{plan_execution_summary}
+- Final Data Shape: {final_data_shape}
 - Full Conversation History (including code, results, and errors):
 {conversation_history}
 
-Based on the entire analysis process, write a concise and clear final report in Markdown format. The report must contain the following three sections, exactly in this order:
+Based on the entire analysis process, write a concise and clear final report in Markdown format. The report **MUST be written entirely in Korean**. The report must contain the following three sections, exactly in this order:
+
+### 0. 분석 절차 요약 (Summary of the Analysis Process)
+A bulleted list summarizing the executed analysis steps and their final status (e.g., Success, Failure). Also, state the shape of the data after all preprocessing steps.
 
 ### 1. 주요 발견 사항 (Key Findings)
 A bulleted list of the most important, data-driven insights. Translate statistical results into plain language. (e.g., "- A팀의 영업 성과는 B팀보다 통계적으로 유의미하게 높았습니다 (p < 0.05).")

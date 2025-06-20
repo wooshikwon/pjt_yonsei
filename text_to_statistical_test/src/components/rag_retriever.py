@@ -46,9 +46,11 @@ class RAGRetriever:
         self.index: VectorStoreIndex = None
         
         # 로컬 임베딩 모델 및 청크 분할기 설정 (API 키 필요 없음)
-        Settings.embed_model = HuggingFaceEmbedding(model_name="jhgan/ko-sroberta-multitask")
-        Settings.node_parser = SentenceSplitter(chunk_size=512, chunk_overlap=20)
-        Settings.llm = None # LLM 호출 비활성화 (순수 RAG 검색만 수행)
+        # LlamaIndex의 전역 설정을 변경할 때 발생하는 불필요한 터미널 출력을 억제
+        with suppress_stdout():
+            Settings.embed_model = HuggingFaceEmbedding(model_name="jhgan/ko-sroberta-multitask")
+            Settings.node_parser = SentenceSplitter(chunk_size=512, chunk_overlap=20)
+            Settings.llm = None # LLM 호출 비활성화 (순수 RAG 검색만 수행)
 
     def load(self) -> None:
         """

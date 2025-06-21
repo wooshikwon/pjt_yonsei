@@ -53,17 +53,32 @@ class Context:
         self.analysis_plan = plan
 
     def add_step_to_summary(self, step: str, status: str) -> None:
-        """분석 계획 실행 요약에 단계별 결과를 추가합니다."""
-        self.plan_execution_summary.append({"step": step, "status": status})
-
-    def add_to_history(self, entry: Dict[str, str]) -> None:
         """
-        대화 기록에 새 항목을 추가합니다.
+        분석 계획 실행 요약에 단계별 결과를 추가합니다.
 
         Args:
-            entry (Dict[str, str]): 'role'과 'content' 또는 'code' 등을 포함하는 대화 조각.
+            step (str): 분석 계획의 단계 이름.
+            status (str): 단계 실행 상태 (예: "SUCCESS", "FAILED").
         """
-        self.conversation_history.append(entry)
+        self.plan_execution_summary.append({"step": step, "status": status})
+
+    def add_code_history(self, code: str) -> None:
+        """
+        대화 기록에 LLM이 생성한 코드를 추가합니다.
+        
+        Args:
+            code (str): LLM이 생성한 Python 코드.
+        """
+        self.conversation_history.append({'type': 'code', 'content': code})
+
+    def add_output_history(self, output: str) -> None:
+        """
+        대화 기록에 코드 실행 결과를 추가합니다.
+        
+        Args:
+            output (str): 코드 실행으로 발생한 표준 출력 또는 오류 메시지.
+        """
+        self.conversation_history.append({'type': 'output', 'content': output})
 
     def set_final_report(self, report: str) -> None:
         """

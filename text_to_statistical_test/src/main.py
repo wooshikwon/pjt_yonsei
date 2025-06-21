@@ -102,7 +102,12 @@ def analyze(
             )
             try:
                 retriever.load()
-                rag_context = retriever.retrieve_context(request)
+                
+                # RAG 쿼리에 파일 이름과 사용자 요청을 함께 사용
+                rag_query = f"Data file: {file_name}\nUser request: {request}"
+                logger.log_detailed(f"RAG Query: {rag_query}")
+
+                rag_context = retriever.retrieve_context(rag_query)
                 context.add_rag_result(rag_context)
                 logger.log_rag_context(rag_context)
                 logger.log_step_success(1, "지식 베이스에서 관련 정보 검색 완료")
@@ -163,63 +168,64 @@ def analyze(
         failed_steps = 0
         for i, step in enumerate(context.analysis_plan):
             step_num = i + 1
-            logger.log_detailed(f"\nExecuting Step {step_num}: {step}")
+            logger.log_step_separator()
+            logger.log_detailed(f"Executing Step {step_num}: {step}")
             
-            response_dict = agent.generate_code_for_step(context, step)
-            status = response_dict.get("status", "EXECUTED")
-            code = response_dict.get("code", "")
-            
+            code = agent.generate_code_for_step(context, step)
             logger.log_generated_code(step_num, code)
 
-            if status == "SKIPPED":
-                logger.log_execution_result(step_num, f"Step skipped: {code}", True)
-                context.add_step_to_summary(step, "Skipped")
-                context.add_to_history({'role': 'assistant', 'code': code})
-                context.add_to_history({'role': 'system', 'result': 'Step was skipped as conditions were not met.'})
-                continue
-
-            result, success, df_after_execution = executor.run(code, global_vars={'df': df})
-            logger.log_execution_result(step_num, result, success)
+            result, status, df_after_execution = executor.run(code, global_vars={'df': df})
+            logger.log_execution_result(step_num, result, status != 'ERROR')
             
-            if success:
-                # 상태 업데이트: [PREP] 태그가 있는 단계에서만 df를 업데이트
+            if status == 'SKIPPED':
+                context.add_step_to_summary(step, "Skipped")
+                context.add_code_history(code)
+                context.add_output_history(result)
+                continue
+            
+            if status == 'SUCCESS':
+                # [PREP] 태그가 있는 단계에서만 데이터프레임 상태를 업데이트하여 데이터 유실 방지
                 if step.strip().startswith("[PREP]") and df_after_execution is not None:
                     df = df_after_execution
                     logger.log_detailed(f"DataFrame state updated after step: {step_num}")
-                    # 데이터 요약 정보도 함께 업데이트
-                    context.set_data_summary(profile_dataframe(df))
-                    logger.log_detailed("Data summary has been updated.")
+                    
+                    # 데이터 요약 정보는 PREP 단계에서만 업데이트하여 컨텍스트 일관성 유지
+                    new_summary = profile_dataframe(df)
+                    context.set_data_summary(new_summary)
+                    logger.log_data_summary(new_summary)
 
                 context.add_step_to_summary(step, "Success")
-                context.add_to_history({'role': 'assistant', 'code': code})
-                context.add_to_history({'role': 'system', 'result': result})
-            else:
+                context.add_code_history(code)
+                context.add_output_history(result)
+            
+            elif status == 'ERROR':
                 logger.log_detailed(f"Step {step_num} failed, attempting self-correction...")
-                context.add_to_history({'role': 'assistant', 'code': code})
-                context.add_to_history({'role': 'system', 'error': result})
+                context.add_code_history(code)
+                context.add_output_history(result)
                 
                 try:
-                    response_dict = agent.self_correct_code(context, step, code, result)
-                    corrected_code = response_dict.get("code", "")
+                    corrected_code = agent.self_correct_code(context, step, code, result)
                     logger.log_detailed(f"Corrected code generated for step {step_num}")
                     
-                    result, success, df_after_execution = executor.run(corrected_code, global_vars={'df': df})
-                    logger.log_execution_result(step_num, f"CORRECTED: {result}", success)
+                    result, status, df_after_execution = executor.run(corrected_code, global_vars={'df': df})
+                    logger.log_execution_result(step_num, f"CORRECTED: {result}", status != 'ERROR')
                     
-                    if success:
-                        # 상태 업데이트: [PREP] 태그가 있는 단계에서만 df를 업데이트
+                    if status == 'SUCCESS':
+                        # [PREP] 태그가 있는 단계에서만 데이터프레임 상태를 업데이트하여 데이터 유실 방지
                         if step.strip().startswith("[PREP]") and df_after_execution is not None:
                             df = df_after_execution
                             logger.log_detailed(f"DataFrame state updated after step: {step_num} (Corrected)")
-                            # 데이터 요약 정보도 함께 업데이트
-                            context.set_data_summary(profile_dataframe(df))
-                            logger.log_detailed("Data summary has been updated after correction.")
+                            
+                            # 데이터 요약 정보는 PREP 단계에서만 업데이트하여 컨텍스트 일관성 유지
+                            new_summary = profile_dataframe(df)
+                            context.set_data_summary(new_summary)
+                            logger.log_data_summary(new_summary)
                             
                         context.add_step_to_summary(step, "Success (Corrected)")
-                        context.add_to_history({'role': 'assistant', 'code': corrected_code})
-                        context.add_to_history({'role': 'system', 'result': result})
-                    else:
-                        raise RuntimeError("Self-correction failed to execute.")
+                        context.add_code_history(corrected_code)
+                        context.add_output_history(result)
+                    else: # SKIPPED 또는 ERROR
+                        raise RuntimeError(f"Self-correction failed. Status: {status}, Result: {result}")
                 except Exception as e:
                     failed_steps += 1
                     context.add_step_to_summary(step, "Failure (Correction Failed)")

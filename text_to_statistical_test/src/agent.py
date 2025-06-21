@@ -57,29 +57,30 @@ class Agent:
         if not code_text:
             return ""
 
-        # 만약 전체가 JSON 블록이면, code 키만 추출
-        try:
-            json_match = re.search(r'\{.*\}', code_text, re.DOTALL)
-            if json_match:
-                parsed = json.loads(json_match.group(0))
-                if 'code' in parsed:
-                    code_text = parsed['code']
-        except json.JSONDecodeError:
-            pass # Not a JSON, proceed with markdown cleaning
+        # 'Python Code:' 블록 이후의 내용만 추출
+        # rfind를 사용하여 예시에 있는 헤더가 아닌, 실제 응답의 마지막 헤더를 찾음
+        code_block_header = "**Python Code:**"
+        header_index = code_text.rfind(code_block_header)
+        
+        if header_index != -1:
+            code_text = code_text[header_index + len(code_block_header):]
             
-        # markdown 코드 블록 제거
+        # markdown 코드 블록 제거 (```python ... ```)
         lines = code_text.strip().split('\n')
         cleaned_lines = []
         in_code_block = False
-        
+
+        # 코드 블록 시작/끝이 있는지 먼저 확인
+        has_backticks = any('```' in line for line in lines)
+
         for line in lines:
-            # 코드 블록 시작/끝 감지
             if line.strip().startswith('```'):
                 in_code_block = not in_code_block
                 continue
             
-            # 코드 블록 내부이거나 코드 블록이 없는 경우 모든 라인 포함
-            if in_code_block or '```' not in code_text:
+            # 백틱이 있는 경우, 블록 내부의 코드만 포함
+            # 백틱이 없는 경우, 모든 라인을 코드로 간주
+            if not has_backticks or in_code_block:
                 cleaned_lines.append(line)
         
         return '\n'.join(cleaned_lines).strip()
@@ -110,34 +111,28 @@ class Agent:
         plan = [re.sub(r'^\s*\d+\.\s*', '', line).strip() for line in plan_lines if line.strip()]
         return plan
 
-    def _parse_json_response(self, response_text: str) -> Dict[str, str]:
-        """LLM의 JSON 응답을 다층적으로 파싱하고, 예외 발생 시 기본값을 반환합니다."""
-        try:
-            # 1단계: 명확한 구분자(###JSON_START###...###JSON_END###)로 추출
-            match = re.search(r'###JSON_START###(.*)###JSON_END###', response_text, re.DOTALL)
-            if match:
-                json_string = match.group(1).strip()
-                parsed = json.loads(json_string)
-                if isinstance(parsed, dict) and "status" in parsed and "code" in parsed:
-                    parsed['code'] = self._clean_code_response(parsed['code'])
-                    return parsed
-
-            # 2단계 (폴백): 구분자가 없을 경우, 전체 텍스트에서 JSON 객체 찾기
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                json_string = json_match.group(0)
-                parsed = json.loads(json_string)
-                if isinstance(parsed, dict) and "status" in parsed and "code" in parsed:
-                    parsed['code'] = self._clean_code_response(parsed['code'])
-                    return parsed
-            
-        except (json.JSONDecodeError, AttributeError):
-            # 3단계 (최후의 수단): 모든 파싱 실패 시, 전체를 코드로 간주
-            pass
+    def _build_code_generation_prompt(self, task_specific_instructions: str, context: Context) -> str:
+        """
+        코드 생성을 위한 전체 프롬프트를 동적으로 구성합니다.
         
-        return {"status": "EXECUTED", "code": self._clean_code_response(response_text)}
+        Args:
+            task_specific_instructions (str): 작업별 지침 (코드 생성 또는 수정).
+            context (Context): 현재 작업 컨텍스트.
+            
+        Returns:
+            str: 완성된 전체 프롬프트 문자열.
+        """
+        history_str = json.dumps(context.conversation_history, indent=2, ensure_ascii=False)
 
-    def generate_code_for_step(self, context: Context, current_step: str) -> Dict[str, str]:
+        return system_prompts.CODE_GENERATION_PROMPT.replace(
+            '{task_specific_instructions}', task_specific_instructions
+        ).replace(
+            '{data_summary}', context.data_summary
+        ).replace(
+            '{conversation_history}', history_str
+        )
+
+    def generate_code_for_step(self, context: Context, current_step: str) -> str:
         """
         분석 계획의 특정 단계를 수행하기 위한 Python 코드를 생성합니다.
 
@@ -146,26 +141,20 @@ class Agent:
             current_step (str): 현재 실행할 분석 단계.
 
         Returns:
-            Dict[str, str]: 'status'와 'code'를 포함하는 딕셔너리.
+            str: LLM이 생성한 순수 Python 코드.
         """
-        history_str = json.dumps(context.conversation_history, indent=2, ensure_ascii=False)
-
-        prompt_body = system_prompts.CODE_GENERATION_PROMPT.replace(
-            '{analysis_plan}', '\n'.join(context.analysis_plan)
-        ).replace(
-            '{current_step}', current_step
-        ).replace(
-            '{data_summary}', context.data_summary
-        ).replace(
-            '{conversation_history}', history_str
+        task_instructions = (
+            f"**Full Analysis Plan**:\n{json.dumps(context.analysis_plan, indent=2)}\n\n"
+            f"**Current Step to Implement**:\n{current_step}"
         )
-        prompt = prompt_body + system_prompts.CODE_GENERATION_PROMPT_EXAMPLES
+        
+        prompt = self._build_code_generation_prompt(task_instructions, context)
         
         messages = [{"role": "system", "content": prompt}]
         raw_response = self._call_api(messages)
-        return self._parse_json_response(raw_response)
+        return self._clean_code_response(raw_response)
 
-    def self_correct_code(self, context: Context, failed_step: str, failed_code: str, error_message: str) -> Dict[str, str]:
+    def self_correct_code(self, context: Context, failed_step: str, failed_code: str, error_message: str) -> str:
         """
         실패한 코드와 오류 메시지를 기반으로 코드를 자가 수정합니다.
 
@@ -176,21 +165,21 @@ class Agent:
             error_message (str): 발생한 오류 메시지.
 
         Returns:
-            Dict[str, str]: 'status'와 'code'를 포함하는 딕셔너리.
+            str: LLM이 생성한 순수 Python 코드.
         """
-        prompt = system_prompts.SELF_CORRECTION_PROMPT.replace(
-            '{failed_step}', failed_step
-        ).replace(
-            '{failed_code}', failed_code
-        ).replace(
-            '{error_message}', error_message
-        ).replace(
-            '{data_schema}', context.data_summary
+        task_instructions = (
+            f"Your previous attempt failed. Here is the context:\n\n"
+            f"**The Goal (Original Step)**:\n{failed_step}\n\n"
+            f"**The Failed Code**:\n```python\n{failed_code}\n```\n\n"
+            f"**The Error Message**:\n```\n{error_message}\n```\n\n"
+            f"Please provide a corrected version of the Python script."
         )
+        
+        prompt = self._build_code_generation_prompt(task_instructions, context)
         
         messages = [{"role": "system", "content": prompt}]
         raw_response = self._call_api(messages)
-        return self._parse_json_response(raw_response)
+        return self._clean_code_response(raw_response)
 
     def generate_final_report(self, context: Context, final_data_shape: Tuple[int, int]) -> str:
         """
@@ -206,8 +195,7 @@ class Agent:
         # plan_execution_summary를 Markdown 형식의 문자열로 변환
         summary_lines = []
         for item in context.plan_execution_summary:
-            status_icon = "✅" if "Success" in item["status"] else "❌"
-            summary_lines.append(f"- {item['step']} ... **{item['status']}** {status_icon}")
+            summary_lines.append(f"- {item['step']} ... **{item['status']}**")
         
         plan_summary_str = "\n".join(summary_lines)
         

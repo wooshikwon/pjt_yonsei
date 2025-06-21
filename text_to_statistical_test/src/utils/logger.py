@@ -80,8 +80,8 @@ class StatisticalAnalysisLogger:
         self.file_logger.info("=== End RAG Context ===")
 
     def log_generated_code(self, step_num: int, code: str):
-        """생성된 코드를 파일에만 기록"""
-        self.file_logger.info(f"=== Generated Code for Step {step_num} ===")
+        """LLM이 생성한 코드를 로그에 기록합니다."""
+        self.file_logger.info(f"--- Generated Code for Step {step_num} ---")
         self.file_logger.info(code)
         self.file_logger.info("=== End Generated Code ===")
 
@@ -106,9 +106,18 @@ class StatisticalAnalysisLogger:
         print("="*80)
 
     def log_report_saved(self, file_path: str):
-        """보고서 저장 완료를 기록"""
-        self.file_logger.info(f"Report saved to: {file_path}")
+        """최종 보고서가 저장되었음을 콘솔에 알립니다."""
         self.console_logger.info(f"💾 보고서가 저장되었습니다: {file_path}")
+
+    def log_step_separator(self):
+        """단계 구분을 위한 수평선을 파일 로그에 출력합니다."""
+        self.file_logger.info("\n" + "="*80 + "\n")
+
+    def log_data_summary(self, summary: str):
+        """데이터 요약 정보를 파일 로그에 기록합니다."""
+        self.file_logger.info("--- Data Summary ---")
+        self.file_logger.info(summary)
+        self.file_logger.info("--------------------")
 
 # 전역 로거 인스턴스
 analysis_logger: Optional[StatisticalAnalysisLogger] = None

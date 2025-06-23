@@ -123,6 +123,10 @@ class StatisticalAnalysisLogger:
         """최종 보고서가 저장되었음을 콘솔에 알립니다."""
         self.console_logger.info(f"💾 보고서가 저장되었습니다: {file_path}")
 
+    def log_final_data_saved(self, file_path: str):
+        """최종 데이터가 저장되었음을 콘솔에 알립니다."""
+        self.console_logger.info(f"💾 최종 데이터가 저장되었습니다: {file_path}")
+
     def log_step_separator(self):
         """단계 구분을 위한 수평선을 파일 로그에 출력합니다."""
         self.file_logger.info("\n" + "="*80 + "\n")

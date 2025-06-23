@@ -59,6 +59,8 @@ def analyze(
     vector_store_path = str(base_path / "resources/rag_index")
     report_path = base_path / "output" / "reports"
     report_path.mkdir(parents=True, exist_ok=True)
+    final_data_path = base_path / "output" / "data_files"
+    final_data_path.mkdir(parents=True, exist_ok=True)
 
     # 컴포넌트 인스턴스화
     context = Context()
@@ -270,14 +272,12 @@ def analyze(
         logger.log_detailed(f"Failed to save report: {e}", "ERROR")
 
     # 최종 데이터프레임 저장
-    final_data_path = base_path / "output" / "data_files"
-    final_data_path.mkdir(parents=True, exist_ok=True)
     final_data_filename = f"final_data-{timestamp}.csv"
     final_data_filepath = final_data_path / final_data_filename
     
     try:
         df.to_csv(final_data_filepath, index=False, encoding='utf-8-sig')
-        logger.log_detailed(f"Final data saved to: {str(final_data_filepath)}")
+        logger.log_final_data_saved(str(final_data_filepath))
     except Exception as e:
         logger.log_detailed(f"Failed to save final data: {e}", "ERROR")
 

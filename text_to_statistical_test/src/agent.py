@@ -67,10 +67,14 @@ class Agent:
         """
         사용자 요청과 데이터 컨텍스트를 기반으로 통계 분석 계획을 생성합니다.
         """
+        rag_context_str = "\n".join(context.rag_results)
+
         prompt = system_prompts.PLANNING_PROMPT.replace(
             '{user_request}', context.user_input.get('request', '')
         ).replace(
             '{data_summary}', context.data_summary
+        ).replace(
+            '{rag_context}', rag_context_str
         )
         
         messages = [{"role": "system", "content": prompt}]
@@ -84,14 +88,14 @@ class Agent:
         """
         코드 생성을 위한 전체 프롬프트를 동적으로 구성합니다.
         """
-        history_str = json.dumps(context.conversation_history, indent=2, ensure_ascii=False)
+        summary_history_str = context.get_summary_history()
 
         return system_prompts.CODE_GENERATION_PROMPT.replace(
             '{task_specific_instructions}', task_specific_instructions
         ).replace(
             '{data_summary}', context.data_summary
         ).replace(
-            '{conversation_history}', history_str
+            '{conversation_history}', summary_history_str
         )
 
     def generate_code_for_step(self, context: Context, current_step: str) -> Tuple[str, str]:

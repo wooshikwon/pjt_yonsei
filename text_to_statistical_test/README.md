@@ -93,7 +93,7 @@ poetry run python -m src.main --file "teachingratings.csv" --request "성별이 
 #### Docker 환경에서:
 
 ```bash
-docker-compose run --rm statistical-analyzer --file "team_sales_performance.csv" --request "팀별 영업 성과에 차이가 있는지 분석해줘"
+poetry run python -m src.main --file "pima-indians-diabetes.csv" --request "나이와 체질량지수가 당뇨병 발병에 어떤 영향을 주는지 분석해줘."
 ```
 
 ## 📁 프로젝트 구조
@@ -141,11 +141,11 @@ poetry run python -m src.main --file "teachingratings.csv" --request "성별이 
 # 예시 2: 연령대별로 외모 점수가 다른지 분석 (ANOVA 유도)
 poetry run python -m src.main --file "teachingratings.csv" --request "교수의 외모 점수가 연령대별로 차이가 나는지 궁금합니다. 분석해주세요."
 
-# 예시 3: 외모 점수와 평가 점수의 관계 분석 (상관분석 유도)
-poetry run python -m src.main --file "teachingratings.csv" --request "교수의 외모 점수가 높을수록 강의 평가 점수도 높은 경향이 있는지 분석해주세요."
+# 예시 3: 외모 점수와 평가 점수의 관계 분석 (다중 회귀분석 유도)
+poetry run python -m src.main --file "ames_housing.csv" --request "집 값에 가장 큰 영향을 주는 요인이 뭘까? 예를 들어 집의 전반적인 상태나, 크기, 그리고 언제 지어졌는지가 집 값과 어떤 관계가 있는지 궁금해."
 
-# 예시 4: 당뇨병 발병 여부 예측 (로지스틱 회귀분석 유도)
-poetry run python -m src.main --file "pima-indians-diabetes.csv" --request "나이와 체질량지수가 당뇨병 발병에 어떤 영향을 주는지 분석해줘."
+# 예시 4: 당뇨병 발병 여부 예측 (상관관계 분석 유도)
+poetry run python -m src.main --file "ames_housing.csv" --request "우리 동네 집 값을 올리는 가장 확실한 숫자 조건 5가지만 알려줘."
 ```
 
 ### 🔧 고급 설정
@@ -181,19 +181,21 @@ poetry run python src/embedder.py
 - 해석: 3점 이상을 만족으로 간주
 ```
 
-## �� 샘플 데이터
+## 샘플 데이터
 
 시스템에는 다양한 통계 분석 시나리오를 테스트할 수 있는 7개의 공개 데이터셋이 `input_data/data_files/`에 포함되어 있습니다.
 
 | 파일명 | 주요 변수 | 대표 분석 유형 |
 |---|---|---|
 | `teachingratings.csv` | 교수 평가 점수, 외모 점수, 성별, 연령대 | t-검정, ANOVA, 상관분석 |
-| `pima-indians-diabetes.csv` | 당뇨병 발병 여부, 혈당, BMI | 로지스틱 회귀분석 |
+| `pima-indians-diabetes.csv` | 당뇨병 발병 여부, 혈당, BMI | 로지스틱 회귀 |
 | `titanic.csv` | 생존 여부, 좌석 등급, 성별, 나이 | 카이제곱 검정, 로지스틱 회귀 |
 | `tips.csv` | 팁 금액, 총 식사 금액, 요일, 시간 | 선형 회귀, ANOVA |
 | `boston_housing.csv` | 주택 가격, 범죄율, 방 개수 | 선형 회귀, 상관분석 |
 | `mpg.csv` | 연비, 마력, 무게, 제조국가 | 선형 회귀, ANOVA |
 | `Iris.csv` | 붓꽃 종류, 꽃잎/꽃받침 길이/너비 | ANOVA, 분류 |
+| `ames_housing.csv` | 주택 가격, 건축 연도, 생활 면적 | 다중 회귀, 상관분석 |
+| `heart_disease_uci.csv` | 환자 나이, 혈압, 콜레스트롤 수치 | 로지스틱 회귀, 카이제곱 검정 |
 
 ## 🐞 문제 해결
 

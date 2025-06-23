@@ -122,8 +122,7 @@ cython_debug/
 .vscode/
 
 # Custom Ignores
-output_data/*
-!output_data/.gitkeep
+output/*
 
 logs/*
 !logs/.gitkeep

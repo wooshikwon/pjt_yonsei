@@ -94,8 +94,9 @@ output/
 # OS generated files
 .DS_Store
 
-# Test results
-tests/validation_result.json
+# knowledge_base
+resources/knowledge_base/*
+!resources/knowledge_base/.gitkeep
 
 # Sensitive files
 # Ignore all .env files except the example template

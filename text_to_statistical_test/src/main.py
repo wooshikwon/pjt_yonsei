@@ -23,6 +23,14 @@ from src.utils.data_profiler import profile_dataframe
 
 app = typer.Typer()
 
+def _update_state_after_prep(df: pd.DataFrame, context: Context, logger, step_info: str) -> pd.DataFrame:
+    """[PREP] 단계 성공 후 df와 data_summary를 업데이트하는 헬퍼 함수."""
+    logger.log_detailed(f"DataFrame state updated after step: {step_info}")
+    new_summary = profile_dataframe(df)
+    context.set_data_summary(new_summary)
+    logger.log_data_summary(new_summary)
+    return df
+
 @app.command()
 def analyze(
     file_name: str = typer.Option(..., "--file", help="Name of the data file in 'input/data_files/'"),
@@ -44,8 +52,6 @@ def analyze(
     use_rag = os.getenv("USE_RAG", "True").lower() == "true"
     rebuild_vector_store = os.getenv("REBUILD_VECTOR_STORE", "False").lower() == "true"
     
-
-
     # 경로 설정
     base_path = Path.cwd()
     input_file_path = base_path / "input" / "data_files" / file_name
@@ -171,61 +177,47 @@ def analyze(
             logger.log_step_separator()
             logger.log_detailed(f"Executing Step {step_num}: {step}")
             
-            code = agent.generate_code_for_step(context, step)
-            logger.log_generated_code(step_num, code)
+            rationale, code = agent.generate_code_for_step(context, step)
+            logger.log_generated_code(step_num, code, rationale)
 
-            result, status, df_after_execution = executor.run(code, global_vars={'df': df})
+            result, status, df_after_execution = executor.run(code, global_vars={'df': df.copy()}) # df.copy()로 안전성 확보
             logger.log_execution_result(step_num, result, status != 'ERROR')
             
+            context.add_rationale_history(rationale) # Rationale도 기록
+            context.add_code_history(code)
+            context.add_output_history(result)
+
             if status == 'SKIPPED':
                 context.add_step_to_summary(step, "Skipped")
-                context.add_code_history(code)
-                context.add_output_history(result)
                 continue
             
             if status == 'SUCCESS':
-                # [PREP] 태그가 있는 단계에서만 데이터프레임 상태를 업데이트하여 데이터 유실 방지
                 if step.strip().startswith("[PREP]") and df_after_execution is not None:
-                    df = df_after_execution
-                    logger.log_detailed(f"DataFrame state updated after step: {step_num}")
-                    
-                    # 데이터 요약 정보는 PREP 단계에서만 업데이트하여 컨텍스트 일관성 유지
-                    new_summary = profile_dataframe(df)
-                    context.set_data_summary(new_summary)
-                    logger.log_data_summary(new_summary)
-
+                    df = _update_state_after_prep(df_after_execution, context, logger, f"{step_num}")
                 context.add_step_to_summary(step, "Success")
-                context.add_code_history(code)
-                context.add_output_history(result)
             
             elif status == 'ERROR':
                 logger.log_detailed(f"Step {step_num} failed, attempting self-correction...")
-                context.add_code_history(code)
-                context.add_output_history(result)
                 
                 try:
-                    corrected_code = agent.self_correct_code(context, step, code, result)
+                    corrected_rationale, corrected_code = agent.self_correct_code(context, step, rationale, code, result)
                     logger.log_detailed(f"Corrected code generated for step {step_num}")
+                    logger.log_generated_code(step_num, corrected_code, corrected_rationale, is_corrected=True)
                     
-                    result, status, df_after_execution = executor.run(corrected_code, global_vars={'df': df})
+                    result, status, df_after_execution = executor.run(corrected_code, global_vars={'df': df.copy()})
                     logger.log_execution_result(step_num, f"CORRECTED: {result}", status != 'ERROR')
                     
+                    context.add_rationale_history(corrected_rationale)
+                    context.add_code_history(corrected_code)
+                    context.add_output_history(result)
+
                     if status == 'SUCCESS':
-                        # [PREP] 태그가 있는 단계에서만 데이터프레임 상태를 업데이트하여 데이터 유실 방지
                         if step.strip().startswith("[PREP]") and df_after_execution is not None:
-                            df = df_after_execution
-                            logger.log_detailed(f"DataFrame state updated after step: {step_num} (Corrected)")
-                            
-                            # 데이터 요약 정보는 PREP 단계에서만 업데이트하여 컨텍스트 일관성 유지
-                            new_summary = profile_dataframe(df)
-                            context.set_data_summary(new_summary)
-                            logger.log_data_summary(new_summary)
-                            
+                            df = _update_state_after_prep(df_after_execution, context, logger, f"{step_num} (Corrected)")
                         context.add_step_to_summary(step, "Success (Corrected)")
-                        context.add_code_history(corrected_code)
-                        context.add_output_history(result)
-                    else: # SKIPPED 또는 ERROR
-                        raise RuntimeError(f"Self-correction failed. Status: {status}, Result: {result}")
+                    else:
+                        raise RuntimeError(f"Self-correction failed. Status: {status}")
+
                 except Exception as e:
                     failed_steps += 1
                     context.add_step_to_summary(step, "Failure (Correction Failed)")

@@ -62,6 +62,16 @@ class Context:
         """
         self.plan_execution_summary.append({"step": step, "status": status})
 
+    def add_rationale_history(self, rationale: str) -> None:
+        """
+        대화 기록에 LLM이 생성한 Rationale을 추가합니다.
+        
+        Args:
+            rationale (str): LLM이 코드 생성 전에 제시한 논리적 근거.
+        """
+        if rationale: # Rationale이 비어있지 않은 경우에만 추가
+            self.conversation_history.append({'type': 'rationale', 'content': rationale})
+
     def add_code_history(self, code: str) -> None:
         """
         대화 기록에 LLM이 생성한 코드를 추가합니다.
@@ -104,4 +114,4 @@ class Context:
             "plan_execution_summary": self.plan_execution_summary,
             "conversation_history": self.conversation_history,
             "final_report": self.final_report,
-        } 
+        }

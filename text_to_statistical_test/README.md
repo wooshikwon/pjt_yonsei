@@ -87,7 +87,7 @@ REBUILD_VECTOR_STORE=False
 #### Poetry 환경에서:
 
 ```bash
-Poetry run python -m src.main --file "team_sales_performance.csv" --request "팀별 영업 성과에 차이가 있는지 분석해줘"
+poetry run python -m src.main --file "teachingratings.csv" --request "성별이 교수 평가 점수에 영향을 주는지 알려주세요."
 ```
 
 #### Docker 환경에서:

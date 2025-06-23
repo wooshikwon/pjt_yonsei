@@ -118,6 +118,8 @@ This history contains the results of previously executed steps. Analyze it caref
 **--- CRITICAL INSTRUCTIONS - FOLLOW THESE STRICTLY ---**
 1. Role & Goal: Your primary role is to act as an expert Python data scientist whose goal is to generate a self-contained Python script to accomplish the "Current Step to Implement".
 2. State Management is Critical:
+* You MUST NOT use variable names from previous steps, assuming they will be magically available. They will not be.
+* If you need a value from a previous calculation (e.g., a test statistic), you MUST re-calculate it within the current script.
 * For [PREP] steps: You MUST re-assign the final, modified DataFrame back to the df variable (e.g., df = df.dropna()).
 * For analysis steps (no [PREP] tag): You MUST NOT re-assign or modify the main df variable.
 3. Print for Context: Use print() to output any important results (e.g., test statistics, p-values). The values you print are critical as they will be used to satisfy If... conditions in later steps of the analysis plan.
@@ -165,6 +167,21 @@ The conversation history shows that the p-value from the Shapiro-Wilk test was l
 from scipy.stats import spearmanr
 corr, p_value = spearmanr(df['sqft_living'], df['price'])
 print(f"Spearman correlation: coefficient={corr}, p-value={p_value}")
+</PYTHON_SCRIPT>
+
+**Example 5: A step that requires re-calculation (Correct way to handle memoryless steps)**
+<RATIONALE>
+The goal is to calculate the rank-biserial correlation, which requires the U-statistic from the previous Mann-Whitney U test. Crucially, the u_statistic variable from the last step is not available in this new, isolated step. Therefore, to get the U-statistic, I must re-run the Mann-Whitney U test within this script. After recalculating the statistic, I will use it to compute the effect size. This ensures the step is self-contained.
+</RATIONALE>
+<PYTHON_SCRIPT>
+from scipy.stats import mannwhitneyu
+female_eval_scores = df[df['gender'] == 'female']['eval']
+male_eval_scores = df[df['gender'] == 'male']['eval']
+u_statistic, _ = mannwhitneyu(female_eval_scores, male_eval_scores)
+n1 = len(female_eval_scores)
+n2 = len(male_eval_scores)
+rank_biserial_corr = 1 - (2 * u_statistic) / (n1 * n2)
+print(f"Rank-biserial correlation (effect size): {rank_biserial_corr}")
 </PYTHON_SCRIPT>
 """
 

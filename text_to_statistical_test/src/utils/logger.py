@@ -79,11 +79,25 @@ class StatisticalAnalysisLogger:
         self.file_logger.info(context)
         self.file_logger.info("=== End RAG Context ===")
 
-    def log_generated_code(self, step_num: int, code: str):
-        """LLM이 생성한 코드를 로그에 기록합니다."""
-        self.file_logger.info(f"--- Generated Code for Step {step_num} ---")
-        self.file_logger.info(code)
-        self.file_logger.info("=== End Generated Code ===")
+    def log_generated_code(self, step_num: int, code: str, rationale: str, is_corrected: bool = False):
+        """
+        LLM이 생성한 Rationale과 Code를 로깅합니다.
+        
+        Args:
+            step_num (int): 현재 단계 번호.
+            code (str): 생성된 Python 코드.
+            rationale (str): 코드 생성의 근거가 된 Rationale.
+            is_corrected (bool, optional): 자가 수정된 코드인지 여부. Defaults to False.
+        """
+        log_header = f"--- Generated Code for Step {step_num} {'(Corrected)' if is_corrected else ''} ---"
+        
+        log_message = (
+            f"{log_header}\n"
+            f"Rationale: {rationale}\n\n"  # Rationale과 Code 사이에 한 줄 띄움
+            f"Code:\n{code}\n"
+            f"=== End Generated Code ==="
+        )
+        self.file_logger.info(log_message)
 
     def log_execution_result(self, step_num: int, result: str, success: bool):
         """코드 실행 결과를 파일에만 기록"""

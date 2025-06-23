@@ -1,0 +1,6 @@
+﻿MSZoning_C (all),MSZoning_FV,MSZoning_RH,MSZoning_RM,Street_Pave,Alley_Grvl,LotShape_IR1,LotShape_IR2,LotShape_IR3
+0,0,0,0,1,0,1,0,0
+0,0,1,0,0,0,0,0,1
+0,1,0,0,1,1,0,1,0
+1,0,0,0,1,0,0,0,1
+0,0,0,1,1,0,0,0,0

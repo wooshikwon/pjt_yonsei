@@ -3,8 +3,8 @@ from typing import Any, Dict, List, Optional
 class Context:
     """
     LLM 에이전트의 "작업 기억 공간(Working Memory)" 역할을 하는 중앙 상태 관리자 클래스입니다.
-    시스템의 모든 상태와 데이터를 구조화하여 저장하고, 각 컴포넌트가 일관된 상태를 공유하도록 합니다.
     """
+
     def __init__(self) -> None:
         """Context 객체를 초기화합니다."""
         self.user_input: Dict[str, str] = {}
@@ -89,6 +89,60 @@ class Context:
             output (str): 코드 실행으로 발생한 표준 출력 또는 오류 메시지.
         """
         self.conversation_history.append({'type': 'output', 'content': output})
+
+    def get_summary_history(self) -> str:
+        """
+        코드 생성을 위해 대화 기록을 간결하게 요약합니다.
+        각 단계의 'Rationale'과 '최종 결과'에 초점을 맞춥니다.
+
+        Returns:
+            str: "단계 -> Rationale -> 결과" 형식의 요약된 히스토리 문자열.
+        """
+        if not self.plan_execution_summary:
+            return "No steps have been executed yet."
+
+        summary_lines = []
+        all_rationales = [item['content'] for item in self.conversation_history if item['type'] == 'rationale']
+        all_outputs = [item['content'] for item in self.conversation_history if item['type'] == 'output']
+        
+        rationale_cursor = 0
+        output_cursor = 0
+
+        for i, summary_item in enumerate(self.plan_execution_summary):
+            step_description = summary_item['step']
+            status = summary_item['status']
+
+            # --- Rationale 추출 ---
+            # 각 단계는 최소 1개의 Rationale을 가지므로, 순서대로 하나를 가져옴
+            current_rationale = ""
+            if rationale_cursor < len(all_rationales):
+                current_rationale = all_rationales[rationale_cursor]
+
+            # 자가 교정 시도가 있었는지 여부를 판단 (성공/실패 무관)
+            is_corrected_attempt = 'Corrected' in status
+            
+            # 자가 교정이 있었다면 Rationale이 2개 소비되므로 커서를 2칸 이동
+            num_rationales_for_step = 2 if is_corrected_attempt else 1
+            rationale_cursor += num_rationales_for_step
+
+            # --- 최종 Output 추출 ---
+            num_outputs_for_step = 2 if is_corrected_attempt else 1
+            step_end_output_index = output_cursor + num_outputs_for_step
+            
+            final_output_content = "Execution result is missing."
+            if step_end_output_index <= len(all_outputs):
+                final_output_content = all_outputs[step_end_output_index - 1]
+            
+            output_cursor = step_end_output_index
+            
+            summary_lines.append(
+                f"--- Previous Step {i+1} ---\n"
+                f"Task: {step_description}\n"
+                f"Rationale: {current_rationale}\n"
+                f"Final Result: {final_output_content.strip()}\n"
+            )
+        
+        return "\n".join(summary_lines)
 
     def set_final_report(self, report: str) -> None:
         """

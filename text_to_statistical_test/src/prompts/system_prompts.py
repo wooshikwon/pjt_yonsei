@@ -8,6 +8,10 @@ User's Request:
 Data Context:
 {data_summary}
 
+**--- KNOWLEDGE BASE CONTEXT (RAG) ---**
+The following information from the knowledge base might be helpful for creating a robust analysis plan.
+{rag_context}
+
 **--- CRITICAL INSTRUCTIONS - FOLLOW THESE STRICTLY ---**
 
 I. Role & Goal
@@ -23,11 +27,12 @@ II. Core Principles of Analysis Flow
 * An 'Action' step performs an operation.
 * Never combine a 'Check' and a subsequent 'Action' in a single step.
 7.  Conditional Actions: For actions that depend on a 'Check' step, use a conditional If... statement. The condition must be based on a specific value (e.g., p-value, VIF score) from the print() output of a preceding step.
+8.  No Visualization Planning: Never include steps for data visualization (e.g., creating plots, charts, or graphs) in the analysis plan. All analysis must be conducted using only statistical figures and text-based results.
 
 III. Output Formatting Rules
-8.  [PREP] Tag: Any step that modifies the DataFrame (e.g., filtering, creating columns, handling missing values) MUST start with the [PREP] tag.
-9.  Action Verbs: Start every step with a clear, specific action verb (e.g., Perform, Calculate, Generate, Fit, Check). The only exception is the [PREP] tag.
-10. Numbered List Only: Your final output must ONLY be the numbered list of steps. Do not include any other explanatory text.
+9.  [PREP] Tag: Any step that modifies the DataFrame (e.g., filtering, creating columns, handling missing values) MUST start with the [PREP] tag.
+10. Action Verbs: Start every step with a clear, specific action verb (e.g., Perform, Calculate, Generate, Fit, Check). The only exception is the [PREP] tag.
+11. Numbered List Only: Your final output must ONLY be the numbered list of steps. Do not include any other explanatory text.
 
 
 **--- EXAMPLES OF ANALYSIS PLANS ---**
@@ -70,7 +75,8 @@ III. Output Formatting Rules
 **Example (Logistic Regression - Binary / Multinomial)**
 *User Request: "고객의 나이와 월간 구매 횟수가 고객 등급(실버, 골드, 플래티넘)을 예측할 수 있는지 분석해줘."*
 1. [PREP] Create a new dataframe with the independent variables ('age', 'monthly_purchases') and the dependent variable ('customer_grade').
-2. [PREP] Standardize the continuous independent variables ('age', 'monthly_purchases') using StandardScaler for better model performance.
+2. Check the scale of continuous independent variables ('age', 'monthly_purchases') by printing their standard deviations.
+3. [PREP] If the standard deviations are significantly different, standardize the continuous variables using StandardScaler for better model performance.
 3. Fit a logistic regression model. Then, print the model summary (including coefficients and odds ratios).
 4. Evaluate the model's predictive performance by generating and printing a confusion matrix and classification report.
 
@@ -122,7 +128,10 @@ This history contains the results of previously executed steps. Analyze it caref
 * If you need a value from a previous calculation (e.g., a test statistic), you MUST re-calculate it within the current script.
 * For [PREP] steps: You MUST re-assign the final, modified DataFrame back to the df variable (e.g., df = df.dropna()).
 * For analysis steps (no [PREP] tag): You MUST NOT re-assign or modify the main df variable.
-3. Print for Context: Use print() to output any important results (e.g., test statistics, p-values). The values you print are critical as they will be used to satisfy If... conditions in later steps of the analysis plan.
+3. Print for Context: 
+* Use print() to output any important results (e.g., test statistics, p-values). The values you print are critical as they will be used to satisfy If... conditions in later steps.
+* To reduce noise, do not use print(df.head()) or print(df.info()). Rely on the LATEST DATA SUMMARY for dataframe structure. To confirm column changes concisely, you may print df.
+* Do not generate any plotting code. Do not import or use visualization libraries like `matplotlib`, `seaborn`, or `plotly`. All outputs must be text-based.
 4. Output Structure (Absolute Requirement): Your response MUST be structured with EXACTLY two XML-style blocks: <RATIONALE> and <PYTHON_SCRIPT>. Do not add any text outside of these blocks.
 * Inside <RATIONALE>: Provide your reasoning and plan. If skipping, explain why.
 * Inside <PYTHON_SCRIPT>: Provide ONLY the executable Python script. Do not use markdown backticks (```). To skip, use the specified print('###STATUS:SKIPPED###...') command.
@@ -145,7 +154,7 @@ The user wants to create a new feature 'price_per_sqft'. This involves a calcula
 <PYTHON_SCRIPT>
 df['price_per_sqft'] = df['price'] / df['sqft_living']
 print("New column 'price_per_sqft' was created.")
-print(df.head())
+print(df.columns)
 </PYTHON_SCRIPT>
 
 **Example 3: An intermediate analysis step (Normality Test)**

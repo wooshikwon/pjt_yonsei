@@ -55,11 +55,18 @@ def analyze(
     # 경로 설정
     base_path = Path.cwd()
     input_file_path = base_path / "input" / "data_files" / file_name
-    knowledge_base_path = str(base_path / "resources/knowledge_base")
-    vector_store_path = str(base_path / "resources/rag_index")
-    report_path = base_path / "output" / "reports"
+    knowledge_base_path = str(base_path / "resources" / "knowledge_base")
+
+    # vector_store_path 경로 생성 및 설정
+    vector_store_path = str(base_path / "resources" / "rag_index")
+    vector_store_path.mkdir(parents=True, exist_ok=True)
+
+    # output 경로 생성 및 설정
+    output_path = base_path / "output"
+    output_path.mkdir(parents=True, exist_ok=True)
+    report_path = output_path / "reports"
     report_path.mkdir(parents=True, exist_ok=True)
-    final_data_path = base_path / "output" / "data_files"
+    final_data_path = output_path / "data_files"
     final_data_path.mkdir(parents=True, exist_ok=True)
 
     # 컴포넌트 인스턴스화

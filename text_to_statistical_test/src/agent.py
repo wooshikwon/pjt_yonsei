@@ -132,7 +132,7 @@ class Agent:
         raw_response = self._call_api(messages)
         return self._clean_code_response(raw_response)
 
-    def generate_final_report(self, context: Context, final_data_shape: Tuple[int, int]) -> str:
+    def generate_final_report(self, context: Context) -> str:
         """
         전체 분석 과정을 요약하는 최종 보고서를 생성합니다.
         """
@@ -142,11 +142,14 @@ class Agent:
         
         plan_summary_str = "\n".join(summary_lines)
         
-        prompt = system_prompts.REPORTING_PROMPT.format(
-            user_request=context.user_input.get('request', ''),
-            plan_execution_summary=plan_summary_str,
-            final_data_shape=f"{final_data_shape[0]} rows, {final_data_shape[1]} columns",
-            conversation_history=json.dumps(context.conversation_history, indent=2, ensure_ascii=False)
+        prompt = system_prompts.REPORTING_PROMPT.replace(
+            '{user_request}', context.user_input.get('request', '')
+        ).replace(
+            '{plan_execution_summary}', plan_summary_str
+        ).replace(
+            '{data_summary}', context.data_summary
+        ).replace(
+            '{conversation_history}', json.dumps(context.conversation_history, indent=2, ensure_ascii=False)
         )
         
         messages = [{"role": "system", "content": prompt}]

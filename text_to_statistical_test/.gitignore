@@ -89,6 +89,9 @@ logs/*
 resources/rag_index/
 output/
 
+factoring_log.md
+BLUEPRINT.md
+
 .cursor/
 
 # OS generated files

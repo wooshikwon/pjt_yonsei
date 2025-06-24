@@ -122,19 +122,24 @@ This history contains the results of previously executed steps. Analyze it caref
 {conversation_history}
 
 **--- CRITICAL INSTRUCTIONS - FOLLOW THESE STRICTLY ---**
-1. Role & Goal: Your primary role is to act as an expert Python data scientist whose goal is to generate a self-contained Python script to accomplish the "Current Step to Implement".
-2. State Management is Critical:
-* You MUST NOT use variable names from previous steps, assuming they will be magically available. They will not be.
-* If you need a value from a previous calculation (e.g., a test statistic), you MUST re-calculate it within the current script.
-* For [PREP] steps: You MUST re-assign the final, modified DataFrame back to the df variable (e.g., df = df.dropna()).
-* For analysis steps (no [PREP] tag): You MUST NOT re-assign or modify the main df variable.
-3. Print for Context: 
-* Use print() to output any important results (e.g., test statistics, p-values). The values you print are critical as they will be used to satisfy If... conditions in later steps.
-* To reduce noise, do not use print(df.head()) or print(df.info()). Rely on the LATEST DATA SUMMARY for dataframe structure. To confirm column changes concisely, you may print df.
-* Do not generate any plotting code. Do not import or use visualization libraries like `matplotlib`, `seaborn`, or `plotly`. All outputs must be text-based.
-4. Output Structure (Absolute Requirement): Your response MUST be structured with EXACTLY two XML-style blocks: <RATIONALE> and <PYTHON_SCRIPT>. Do not add any text outside of these blocks.
-* Inside <RATIONALE>: Provide your reasoning and plan. If skipping, explain why.
-* Inside <PYTHON_SCRIPT>: Provide ONLY the executable Python script. Do not use markdown backticks (```). To skip, use the specified print('###STATUS:SKIPPED###...') command.
+I. Role & Goal
+1.  Act as an expert Python data scientist. Your goal is to generate a single, self-contained Python script that accomplishes the "Current Step to Implement".
+
+II. Execution Environment & State Management
+2.  **`df` is Always Available**: Your script runs in an environment where a pandas DataFrame named `df` is **always pre-loaded**. You **MUST** use this `df` directly for all operations. Do not create a new dummy DataFrame or try to read data from a file.
+3.  **Memoryless Execution**: Each script runs in a fresh, isolated environment. Variables from previous steps **do not carry over**. If a value from a prior calculation is needed (e.g., a p-value), you **MUST recalculate it** within the current script.
+4.  **Handling `df` for `[PREP]` Steps**: If the current step starts with the `[PREP]` tag, you are modifying the data. You **MUST** re-assign the final, modified DataFrame back to the `df` variable (e.g., `df = df.dropna()`).
+5.  **Handling `df` for Analysis Steps**: For any step that does not have the `[PREP]` tag, you **MUST NOT** modify or re-assign the `df` variable. Treat it as read-only.
+
+III. Code Output Rules
+6.  **Use `print()` for Communication**: The `print()` function is the only way to pass information to subsequent steps. You MUST print all key statistical results (e.g., p-values, test statistics).
+7.  **Text-Only, No Plots**: All output must be text-based. Do not import or use any visualization libraries (e.g., `matplotlib`, `seaborn`).
+8.  **Avoid Redundant Output**: Do not use `print(df.head())` or `print(df.info())`. This information is already available in the `LATEST DATA SUMMARY`.
+
+IV. Final Response Structure
+9.  **Strict XML Structure**: Your entire response MUST contain ONLY two XML-style blocks: `<RATIONALE>` and `<PYTHON_SCRIPT>`. Do not add any text outside of these blocks.
+10. **`<RATIONALE>` Content**: Inside this block, provide your reasoning and plan. If skipping the step, explain why.
+11. **`<PYTHON_SCRIPT>` Content**: Inside this block, provide ONLY the raw, executable Python script. Do not use markdown backticks (```). To skip a step, the script must be `print('###STATUS:SKIPPED###\n<Your reason for skipping>')`.
 
 
 **--- EXAMPLES OF REQUIRED OUTPUT STRUCTURE ---**
@@ -204,8 +209,8 @@ Original User Request:
 Plan Execution Summary:
 {plan_execution_summary}
 
-Final Data Shape:
-{final_data_shape}
+Final Data Summary:
+{data_summary}
 
 Full Conversation History (including code, results, and errors):
 {conversation_history}
@@ -226,9 +231,13 @@ A bulleted list summarizing the executed analysis steps and their final status (
 ### 1. 주요 발견 사항 (Key Findings)
 A bulleted list of the most important, data-driven insights. Translate statistical results into plain language. (e.g., "- A팀의 영업 성과는 B팀보다 통계적으로 유의미하게 높았습니다 (p < 0.05).")
 
-### 2. 결론 및 권장 사항 (Conclusion & Recommendations)
-A paragraph summarizing the overall conclusion and providing actionable recommendations based on the findings. (e.g., "결론적으로 A팀의 영업 전략이 더 효과적이었습니다. B팀의 성과 개선을 위해 A팀의 성공 요인을 분석하여 적용할 것을 권장합니다.")
+### 2. 분석 결론 (Analysis Conclusion)
+**This is the most important section. Synthesize all findings from the 'Key Findings' and 'Detailed Results' sections into a comprehensive and detailed natural language summary.**
+- **Narrative Flow**: Weave the key findings into a logical story. Start with the main answer to the user's question and then provide the supporting evidence.
+- **Simple Language, Key Numbers**: Explain the results using easy-to-understand language, avoiding jargon where possible. However, you MUST include and explain key statistical figures (e.g., correlation coefficients, p-values, effect sizes) to support your claims. (e.g., "고객 만족도와 재방문 의사 사이에는 뚜렷한 양의 관계(상관계수 r = 0.45)가 있었습니다. 이는 만족도가 높을수록 재방문할 가능성이 커진다는 것을 의미합니다." or "A와 B 그룹 간의 평균 차이는 통계적으로 유의미하지 않았습니다(p-value = 0.23). 따라서 현재 데이터만으로는 두 그룹 간에 차이가 있다고 말하기 어렵습니다.")
+- **Contextualize Everything**: Connect the statistical results back to the original data and the user's question. Explain what the numbers *mean* for the variables being analyzed.
+- **Holistic Interpretation**: Provide a clear, overarching interpretation of the analysis as a whole. Do not provide business recommendations or next steps. Focus solely on what the data and the statistical tests have revealed.
 
 ### 3. 통계 검정 상세 결과 (Detailed Results)
 A summary of the detailed statistical outputs. Present this in a clean, readable format, perhaps using a table or bullet points. Include key metrics like p-values, test statistics, degrees of freedom, and effect sizes. (e.g., "- Independent T-test: t-statistic = 2.31, p-value = 0.02, Cohen's d = 0.55")
-""" 
+"""

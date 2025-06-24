@@ -248,7 +248,7 @@ def analyze(
     # --- Step 5: 최종 보고서 생성 ---
     logger.log_step_start(5, "최종 보고서 생성")
     try:
-        final_report = agent.generate_final_report(context, final_data_shape=df.shape)
+        final_report = agent.generate_final_report(context)
         context.set_final_report(final_report)
         logger.log_step_success(5, "보고서 생성 완료")
     except Exception as e:

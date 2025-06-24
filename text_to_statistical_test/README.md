@@ -80,6 +80,9 @@ USE_RAG=True
 
 # 벡터 저장소 재구축 여부 (선택)
 REBUILD_VECTOR_STORE=False
+
+# API 호출에 사용할 OpenAI 모델의 이름 (필수).
+OPENAI_MODEL_NAME="gpt-4o"
 ```
 
 ### 4. 첫 번째 분석 실행
